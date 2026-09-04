@@ -1,0 +1,31 @@
+{
+  "event_id": "42",
+  "change_id": "42",
+  "agency_id": "demo-agency",
+  "shop_id": "demo-shop.myshopify.com",
+  "target_type": "product",
+  "target_id": "7001",
+  "mutation_class": "product.title",
+  "current_value": "Externally changed demo title",
+  "proposed_value": "Approved governed demo title",
+  "policy_context": {
+    "source": "shopify_webhook",
+    "event_type": "EXTERNAL_PRODUCTION_CHANGE_DETECTED",
+    "external_change_id": "42",
+    "scope_key": "demo-scope-product-7001-title",
+    "shopify_webhook_id": "demo-webhook-42",
+    "detected_at": "2026-09-05T12:34:56Z",
+    "governed_field": "title",
+    "decision_version_id": "demo-decision-42",
+    "audit_id": 42,
+    "review_cycle_id": "demo-review-42",
+    "expected_governed_value": "Approved governed demo title",
+    "observed_shopify_value": "Externally changed demo title"
+  },
+  "authority_context": {
+    "requires_human_approval": true,
+    "authority_mode": "PROPOSE_ONLY",
+    "origin": "external_production_change"
+  }
+}
+

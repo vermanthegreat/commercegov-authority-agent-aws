@@ -1,0 +1,20 @@
+{
+  "event_id": "malformed-1",
+  "change_id": "different-change-id",
+  "agency_id": "demo-agency",
+  "shop_id": "not-a-shop-domain",
+  "target_type": "product",
+  "target_id": "7001",
+  "mutation_class": "product.title",
+  "policy_context": {
+    "source": "shopify_webhook",
+    "event_type": "EXTERNAL_PRODUCTION_CHANGE_DETECTED",
+    "external_change_id": "malformed-1",
+    "scope_key": "malformed-scope"
+  },
+  "authority_context": {
+    "requires_human_approval": false,
+    "authority_mode": "AUTO_APPROVE",
+    "origin": "external_production_change"
+  }
+}
