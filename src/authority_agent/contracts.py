@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Protocol
+from typing import Any, Mapping, Protocol, runtime_checkable
 
 INTERNAL_SCHEMA_VERSION = "commercegov.authority-event.v1"
 WIRE_SCHEMA_VERSION = "commercegov.operational-event.v1"
@@ -87,6 +87,7 @@ class SemanticAssessment:
     confidence: float | None = None
 
 
+@runtime_checkable
 class SemanticProvider(Protocol):
     """Produces semantic advice only; it has no executable authority."""
 
@@ -113,4 +114,3 @@ class HandlerResponse:
     status_code: int
     body: dict[str, Any]
     cached: bool = False
-
