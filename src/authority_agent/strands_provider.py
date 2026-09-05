@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 import json
 from typing import Any, Callable, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from strands import Agent
 from strands.models import BedrockModel
 from strands.types.exceptions import StructuredOutputException
@@ -50,7 +50,16 @@ class SemanticAssessmentSchema(BaseModel):
         "COMPARE_WITH_GOVERNED_VALUE",
         "RESTORE_GOVERNED_VALUE",
     ]
-    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    confidence: float | None = None
+
+    @field_validator("confidence")
+    @classmethod
+    def validate_confidence(cls, value: float | None) -> float | None:
+        # Bedrock tool schemas reject JSON Schema minimum/maximum keywords for
+        # numbers. Keep the invariant in application validation instead.
+        if value is not None and not 0.0 <= value <= 1.0:
+            raise ValueError("confidence_out_of_range")
+        return value
 
 
 class AgentLike(Protocol):
@@ -69,9 +78,10 @@ def _default_agent_factory(
             model_id=model_id,
             region_name=region_name,
             temperature=0.0,
-            max_tokens=600,
+            max_tokens=1600,
             streaming=False,
             strict_tools=True,
+            additional_request_fields={"thinking": {"type": "disabled"}},
         )
         return Agent(
             model=model,
@@ -99,6 +109,7 @@ class StrandsSemanticProvider:
         if timeout_seconds <= 0:
             raise ValueError("invalid_semantic_timeout")
         self._context_builder = context_builder
+        self.model_id = model_id
         self._agent_factory = agent_factory or _default_agent_factory(
             model_id=model_id, region_name=region_name
         )
@@ -142,4 +153,3 @@ class StrandsSemanticProvider:
             recommended_operator_action=validated.recommended_operator_action,
             confidence=validated.confidence,
         )
-

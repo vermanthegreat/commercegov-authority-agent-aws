@@ -1,0 +1,177 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: CommerceGov Authority Agent P2 synthetic hosted proof
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: p2
+    AllowedPattern: '^[a-z0-9-]+$'
+  AllowedAgencyId:
+    Type: String
+    Default: demo-agency
+  AllowedShopId:
+    Type: String
+    Default: demo-shop.myshopify.com
+  BedrockModelId:
+    Type: String
+    Default: global.anthropic.claude-sonnet-4-6
+    AllowedValues:
+      - global.anthropic.claude-sonnet-4-6
+  RuntimeBuildId:
+    Type: String
+    Default: p2-candidate
+
+Resources:
+  AuthorityTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub commercegov-authority-agent-${EnvironmentName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Project
+          Value: commercegov-authority-agent-aws
+        - Key: Phase
+          Value: P2
+
+  AuthorityApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub /aws/apigateway/commercegov-authority-agent-${EnvironmentName}
+      RetentionInDays: 30
+
+  AuthorityApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Name: !Sub commercegov-authority-agent-${EnvironmentName}
+      StageName: !Ref EnvironmentName
+      Auth:
+        EnableIamAuthorizer: true
+        DefaultAuthorizer: AWS_IAM
+      AccessLogSettings:
+        DestinationArn: !GetAtt AuthorityApiAccessLogGroup.Arn
+        Format: >-
+          {"requestId":"$context.requestId","routeKey":"$context.routeKey","status":"$context.status","integrationStatus":"$context.integrationStatus","responseLatency":"$context.responseLatency"}
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 5
+        ThrottlingRateLimit: 2
+      Tags:
+        Project: commercegov-authority-agent-aws
+        Phase: P2
+
+  AuthorityFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub /aws/lambda/commercegov-authority-agent-${EnvironmentName}
+      RetentionInDays: 30
+
+  AuthorityFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub commercegov-authority-agent-${EnvironmentName}-lambda
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AuthorityRuntimeLeastPrivilege
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: WriteOwnLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub ${AuthorityFunctionLogGroup.Arn}:*
+              - Sid: DurableAuthorityRecord
+                Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt AuthorityTable.Arn
+              - Sid: InvokeExactBedrockModel
+                Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}
+                  - arn:aws:bedrock:::foundation-model/anthropic.claude-sonnet-4-6
+                  - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/anthropic.claude-sonnet-4-6
+      Tags:
+        - Key: Project
+          Value: commercegov-authority-agent-aws
+        - Key: Phase
+          Value: P2
+
+  AuthorityFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: AuthorityFunctionLogGroup
+    Properties:
+      FunctionName: !Sub commercegov-authority-agent-${EnvironmentName}
+      Description: Synthetic-only P2 authority assessment runtime
+      CodeUri: .build/lambda/
+      Handler: authority_agent.lambda_runtime.lambda_handler
+      Runtime: python3.13
+      Architectures:
+        - x86_64
+      MemorySize: 1024
+      Timeout: 29
+      Role: !GetAtt AuthorityFunctionRole.Arn
+      Environment:
+        Variables:
+          AUTHORITY_TABLE_NAME: !Ref AuthorityTable
+          ALLOWED_AGENCY_ID: !Ref AllowedAgencyId
+          ALLOWED_SHOP_ID: !Ref AllowedShopId
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          SEMANTIC_TIMEOUT_SECONDS: '24'
+          RUNTIME_BUILD_ID: !Ref RuntimeBuildId
+          LOG_LEVEL: INFO
+      Events:
+        Assess:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AuthorityApi
+            Path: /assess
+            Method: POST
+            PayloadFormatVersion: '2.0'
+      Tags:
+        Project: commercegov-authority-agent-aws
+        Phase: P2
+
+Outputs:
+  ApiEndpoint:
+    Description: IAM-authenticated synthetic assessment endpoint
+    Value: !Sub https://${AuthorityApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${EnvironmentName}/assess
+  LambdaArn:
+    Value: !GetAtt AuthorityFunction.Arn
+  DynamoDbTableName:
+    Value: !Ref AuthorityTable
+  LambdaRoleArn:
+    Value: !GetAtt AuthorityFunctionRole.Arn
+  ModelId:
+    Value: !Ref BedrockModelId
+  RuntimeBuildId:
+    Value: !Ref RuntimeBuildId

@@ -64,6 +64,9 @@ def main() -> int:
     provider = StrandsSemanticProvider(
         context_builder=builder,
         region_name=os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION"),
+        # First-use Bedrock latency can exceed the hosted request budget. The
+        # pre-deployment smoke measures that path before P2 chooses a runtime.
+        timeout_seconds=60.0,
     )
     result = provider.assess(event)
     print(f"BEDROCK_LIVE_SMOKE: PASS ({result.classification})")

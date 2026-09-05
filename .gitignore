@@ -5,3 +5,7 @@ __pycache__/
 .venv/
 dist/
 build/
+.build/
+.aws-sam/
+.tools/
+p2-certification.json

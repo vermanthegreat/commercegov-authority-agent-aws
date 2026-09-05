@@ -93,6 +93,82 @@ approval, Apply, or production-write implementation, and stores no credentials.
 Later slices can wire runtime and durable idempotency without weakening
 deterministic control.
 
+## P2 AWS hosted runtime
+
+P2 adds a synthetic-only hosted proof while leaving CommerceGov and its
+production integrations untouched:
+
+```text
+IAM-signed API Gateway HTTP API /assess
+  -> Lambda transport adapter
+  -> tenant-bound DynamoDB atomic claim
+  -> Strands 1.54.0 / Bedrock semantic assessment
+  -> P0 deterministic authority kernel
+  -> DynamoDB exact response + concise evidence
+  -> CommerceGov-compatible HTTP response
+```
+
+The API uses `AWS_IAM`; unsigned callers cannot invoke the route. This is a
+replaceable P2 proof boundary, not the final CommerceGov OAuth design. The
+Lambda role can write only its one table, invoke only
+`global.anthropic.claude-sonnet-4-6` through its exact inference profile/model
+ARNs, and write only its own CloudWatch logs. It has no CommerceGov, Shopify,
+database, approval, Apply, secret-reading, or unrelated DynamoDB permission.
+
+The single DynamoDB item uses:
+
+- `PK = TENANT#{agency_id}#SHOP#{shop_id}`
+- `SK = EVENT#{event_id}`
+
+The first request atomically creates `PROCESSING` with a canonical SHA-256
+request fingerprint. Successful processing conditionally transitions it to
+`COMPLETE` and stores the exact response plus bounded evidence. An exact
+duplicate returns that response without a second model call. A different hash
+for the same tenant/event fails closed as a conflict. No TTL is configured, so
+the P2 evidence remains available; encryption and point-in-time recovery are
+enabled.
+
+Evidence includes safe identities, timestamps, execution/evidence IDs, request
+and response hashes, the supplied policy context reference, provider/model,
+semantic status/classification/summary, deterministic authority result, and
+runtime build identity. It excludes raw headers, credentials, unrestricted
+model input/output, and chain-of-thought.
+
+The synchronous budget is API Gateway/Lambda 29 seconds with the semantic
+provider capped at 24 seconds. Any semantic timeout is still processed by the
+P0 fail-safe authority floor. Structured logs record safe event identity,
+canonical/duplicate/conflict path, semantic outcome, persistence, terminal
+status, cache status, and latency.
+
+Build and deploy the reproducible SAM stack:
+
+```powershell
+./scripts/deploy_p2.ps1 -BuildId p2-candidate
+```
+
+The build script installs an explicit Linux x86_64 Python 3.13 runtime lock
+into `.build/lambda`. The unused MCP transport dependency is excluded because
+P2 loads only local decorated tools; this also avoids incorrectly resolving
+MCP's Windows-only `pywin32` marker on the Windows build host. The deployed
+artifact imports no MCP module. Normal tests and build artifacts do not require
+live AWS.
+Hosted certification
+uses SigV4 and the canonical synthetic fixture:
+
+```powershell
+python ./scripts/certify_hosted.py --endpoint <stack-output> --table <stack-output>
+```
+
+### Originality by phase
+
+PRE-EXISTING: CommerceGov governance platform, Shopify integration, policy
+model, Review/approval/Apply workflow, and operational event concept.
+
+AWS HACKATHON WORK: P0 deterministic authority kernel; P1 Strands/Bedrock
+semantic assessment and bounded tools; P2 AWS Lambda/API runtime with durable
+DynamoDB idempotency and evidence. Live CommerceGov integration remains a later
+phase.
+
 ## KNOWN_EXTERNAL_INTEGRATION_BLOCKER
 
 The real CommerceGov producer places `scope_key` at
@@ -100,4 +176,5 @@ The real CommerceGov producer places `scope_key` at
 reads a top-level `handoff_payload["scope_key"]`. P0 fixtures intentionally
 match the real producer contract and do not add the artificial top-level field.
 CommerceGov is not modified here; that mismatch requires a separately
-authorized change after this spine is stable.
+authorized change after this spine is stable. P2 neither fixes nor works around
+it and does not fabricate a top-level `scope_key`.

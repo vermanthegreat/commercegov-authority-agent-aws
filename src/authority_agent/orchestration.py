@@ -38,6 +38,8 @@ class TenantBindingRegistry:
 @dataclass(slots=True)
 class ClaimResult:
     cached_response: dict[str, Any] | None = None
+    execution_id: str | None = None
+    evidence_id: str | None = None
 
 
 class IdempotencyLedger(Protocol):
@@ -45,7 +47,11 @@ class IdempotencyLedger(Protocol):
         ...
 
     def complete(
-        self, event: AuthorityEvent, request_hash: str, response: Mapping[str, Any]
+        self,
+        event: AuthorityEvent,
+        request_hash: str,
+        response: Mapping[str, Any],
+        evidence: Mapping[str, Any] | None = None,
     ) -> None:
         ...
 
@@ -83,7 +89,11 @@ class InMemoryIdempotencyLedger:
             raise EventInProgressError("event_processing_in_progress")
 
     def complete(
-        self, event: AuthorityEvent, request_hash: str, response: Mapping[str, Any]
+        self,
+        event: AuthorityEvent,
+        request_hash: str,
+        response: Mapping[str, Any],
+        evidence: Mapping[str, Any] | None = None,
     ) -> None:
         identity = (event.agency_id, event.shop_id, event.event_id)
         with self._lock:
@@ -151,6 +161,29 @@ class AuthorityProcessor:
             event, semantic_output, semantic_status=semantic_status
         )
         response = to_commercegov_response(result)
-        self.ledger.complete(event, request_hash, response)
+        if isinstance(semantic_output, Mapping):
+            semantic_classification = semantic_output.get("classification")
+            semantic_summary = semantic_output.get("summary")
+        else:
+            semantic_classification = getattr(semantic_output, "classification", None)
+            semantic_summary = getattr(semantic_output, "summary", None)
+        evidence = {
+            "semantic_provider": getattr(
+                self.semantic_provider,
+                "provider_name",
+                type(self.semantic_provider).__name__,
+            ),
+            "semantic_model": getattr(self.semantic_provider, "model_id", None),
+            "semantic_status": semantic_status,
+            "semantic_classification": semantic_classification,
+            "semantic_summary": semantic_summary,
+            "deterministic_classification": result.classification,
+            "authority_mode": result.authority_mode,
+            "human_authority_required": result.human_authority_required,
+            "autonomous_processing": result.autonomous_processing,
+            "terminal_status": result.terminal_status,
+        }
+        if semantic_status != "valid":
+            evidence["error_category"] = "semantic_provider_error"
+        self.ledger.complete(event, request_hash, response, evidence)
         return HandlerResponse(200, response)
-
