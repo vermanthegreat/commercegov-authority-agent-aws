@@ -95,6 +95,7 @@ def test_runtime_configuration_is_explicit_and_model_locked() -> None:
         "BEDROCK_MODEL_ID": "global.anthropic.claude-sonnet-4-6",
         "SEMANTIC_TIMEOUT_SECONDS": "24",
         "RUNTIME_BUILD_ID": "candidate",
+        "INBOUND_BEARER_SECRET_ARN": "arn:aws:secretsmanager:us-east-1:111122223333:secret:inbound",
     }
     assert RuntimeConfig.from_env(base).region_name == "us-east-1"
     with pytest.raises(ValueError, match="unapproved_bedrock_model"):

@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: CommerceGov Authority Agent P2 synthetic hosted proof
+Description: CommerceGov Authority Agent P2 runtime with P3A operational ingress
 
 Parameters:
   EnvironmentName:
@@ -120,18 +120,39 @@ Resources:
                   - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}
                   - arn:aws:bedrock:::foundation-model/anthropic.claude-sonnet-4-6
                   - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/anthropic.claude-sonnet-4-6
+              - Sid: ReadInboundBearerSecret
+                Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref InboundBearerSecret
       Tags:
         - Key: Project
           Value: commercegov-authority-agent-aws
         - Key: Phase
           Value: P2
 
+  InboundBearerSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Name: !Sub commercegov-authority-agent-${EnvironmentName}-inbound-bearer
+      Description: CommerceGov inbound bearer for POST /events/operational
+      GenerateSecretString:
+        PasswordLength: 48
+        ExcludePunctuation: true
+      Tags:
+        - Key: Project
+          Value: commercegov-authority-agent-aws
+        - Key: Phase
+          Value: P3A
+
   AuthorityFunction:
     Type: AWS::Serverless::Function
     DependsOn: AuthorityFunctionLogGroup
     Properties:
       FunctionName: !Sub commercegov-authority-agent-${EnvironmentName}
-      Description: Synthetic-only P2 authority assessment runtime
+      Description: P2 authority runtime with P3A CommerceGov operational ingress
       CodeUri: .build/lambda/
       Handler: authority_agent.lambda_runtime.lambda_handler
       Runtime: python3.13
@@ -148,6 +169,7 @@ Resources:
           BEDROCK_MODEL_ID: !Ref BedrockModelId
           SEMANTIC_TIMEOUT_SECONDS: '24'
           RUNTIME_BUILD_ID: !Ref RuntimeBuildId
+          INBOUND_BEARER_SECRET_ARN: !Ref InboundBearerSecret
           LOG_LEVEL: INFO
       Events:
         Assess:
@@ -157,14 +179,29 @@ Resources:
             Path: /assess
             Method: POST
             PayloadFormatVersion: '2.0'
+        Operational:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AuthorityApi
+            Path: /events/operational
+            Method: POST
+            PayloadFormatVersion: '2.0'
+            Auth:
+              Authorizer: NONE
       Tags:
         Project: commercegov-authority-agent-aws
-        Phase: P2
+        Phase: P3A
 
 Outputs:
   ApiEndpoint:
     Description: IAM-authenticated synthetic assessment endpoint
     Value: !Sub https://${AuthorityApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${EnvironmentName}/assess
+  OperationalEndpoint:
+    Description: Bearer-authenticated CommerceGov operational ingress
+    Value: !Sub https://${AuthorityApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${EnvironmentName}/events/operational
+  InboundBearerSecretArn:
+    Description: Secrets Manager ARN for the inbound CommerceGov bearer
+    Value: !Ref InboundBearerSecret
   LambdaArn:
     Value: !GetAtt AuthorityFunction.Arn
   DynamoDbTableName:

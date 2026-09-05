@@ -14,6 +14,7 @@ import boto3
 
 from authority_agent.dynamodb_ledger import DynamoDbIdempotencyLedger
 from authority_agent.handler import handle_payload
+from authority_agent.inbound_auth import BearerAuthError, BearerAuthenticator, SecretsManagerBearerAuthenticator
 from authority_agent.orchestration import AuthorityProcessor, TenantBindingRegistry
 from authority_agent.runtime_context import SyntheticProofContextBuilder
 from authority_agent.strands_provider import DEFAULT_BEDROCK_MODEL_ID, StrandsSemanticProvider
@@ -36,6 +37,7 @@ class RuntimeConfig:
     model_id: str
     semantic_timeout_seconds: float
     build_id: str
+    inbound_bearer_secret_arn: str
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> "RuntimeConfig":
@@ -45,6 +47,7 @@ class RuntimeConfig:
             "ALLOWED_AGENCY_ID": values.get("ALLOWED_AGENCY_ID", "").strip(),
             "ALLOWED_SHOP_ID": values.get("ALLOWED_SHOP_ID", "").strip(),
             "AWS_REGION": values.get("AWS_REGION", "").strip(),
+            "INBOUND_BEARER_SECRET_ARN": values.get("INBOUND_BEARER_SECRET_ARN", "").strip(),
         }
         if any(not value for value in required.values()):
             raise ValueError("missing_runtime_configuration")
@@ -62,6 +65,7 @@ class RuntimeConfig:
             model_id=model_id,
             semantic_timeout_seconds=timeout,
             build_id=values.get("RUNTIME_BUILD_ID", "unknown").strip() or "unknown",
+            inbound_bearer_secret_arn=required["INBOUND_BEARER_SECRET_ARN"],
         )
 
 
@@ -130,19 +134,38 @@ def _response(status_code: int, body: Mapping[str, Any], *, cached: bool = False
     }
 
 
-def handle_api_event(event: Mapping[str, Any], context: Any, processor: AuthorityProcessor) -> dict[str, Any]:
+def _assess_iam_denied(request_context: Mapping[str, Any]) -> bool:
+    authorizer = request_context.get("authorizer")
+    iam = authorizer.get("iam") if isinstance(authorizer, Mapping) else None
+    return not isinstance(iam, Mapping) or not iam.get("userArn")
+
+
+def handle_api_event(
+    event: Mapping[str, Any],
+    context: Any,
+    processor: AuthorityProcessor,
+    bearer_authenticator: BearerAuthenticator | None = None,
+) -> dict[str, Any]:
     started = monotonic()
     request_context = event.get("requestContext")
     if not isinstance(request_context, Mapping):
         return _response(400, {"error": "invalid_api_gateway_request", "terminal_status": "FAIL_CLOSED"})
-    authorizer = request_context.get("authorizer")
-    iam = authorizer.get("iam") if isinstance(authorizer, Mapping) else None
-    if not isinstance(iam, Mapping) or not iam.get("userArn"):
-        return _response(403, {"error": "iam_authorization_required", "terminal_status": "FAIL_CLOSED"})
     http = request_context.get("http")
     method = http.get("method") if isinstance(http, Mapping) else None
     route_key = event.get("routeKey") or request_context.get("routeKey")
-    if method != "POST" or route_key != "POST /assess":
+    if method != "POST":
+        return _response(405, {"error": "unsupported_route", "terminal_status": "FAIL_CLOSED"})
+    if route_key == "POST /assess":
+        if _assess_iam_denied(request_context):
+            return _response(403, {"error": "iam_authorization_required", "terminal_status": "FAIL_CLOSED"})
+    elif route_key == "POST /events/operational":
+        if bearer_authenticator is None:
+            return _response(503, {"error": "inbound_bearer_unavailable", "terminal_status": "FAIL_CLOSED"})
+        try:
+            bearer_authenticator.authenticate(event.get("headers") if isinstance(event.get("headers"), Mapping) else None)
+        except BearerAuthError as exc:
+            return _response(exc.status_code, {"error": exc.code, "terminal_status": "FAIL_CLOSED"})
+    else:
         return _response(405, {"error": "unsupported_route", "terminal_status": "FAIL_CLOSED"})
     headers = event.get("headers")
     content_type = ""
@@ -194,10 +217,16 @@ def handle_api_event(event: Mapping[str, Any], context: Any, processor: Authorit
 
 
 _PROCESSOR: AuthorityProcessor | None = None
+_BEARER_AUTHENTICATOR: SecretsManagerBearerAuthenticator | None = None
 
 
 def lambda_handler(event: Mapping[str, Any], context: Any) -> dict[str, Any]:
-    global _PROCESSOR
-    if _PROCESSOR is None:
-        _PROCESSOR = build_processor(RuntimeConfig.from_env())
-    return handle_api_event(event, context, _PROCESSOR)
+    global _PROCESSOR, _BEARER_AUTHENTICATOR
+    if _PROCESSOR is None or _BEARER_AUTHENTICATOR is None:
+        config = RuntimeConfig.from_env()
+        _PROCESSOR = build_processor(config)
+        _BEARER_AUTHENTICATOR = SecretsManagerBearerAuthenticator(
+            boto3.client("secretsmanager", region_name=config.region_name),
+            config.inbound_bearer_secret_arn,
+        )
+    return handle_api_event(event, context, _PROCESSOR, bearer_authenticator=_BEARER_AUTHENTICATOR)

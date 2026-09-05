@@ -16,9 +16,15 @@ def test_sam_template_defines_only_minimal_authenticated_runtime() -> None:
     assert "Action: '*'" not in template
     assert "Resource: '*'" not in template
     assert "dynamodb:Scan" not in template
-    assert "secretsmanager:" not in template
+    assert "secretsmanager:GetSecretValue" in template
+    assert "secretsmanager:*" not in template
+    assert "Path: /events/operational" in template
+    assert "Authorizer: NONE" in template
+    assert "Path: /assess" in template
+    assert "DefaultAuthorizer: AWS_IAM" in template
     assert "bedrock:InvokeModel" in template
     assert "global.anthropic.claude-sonnet-4-6" in template
+    assert "proposals:write" not in template
 
 
 def test_lambda_build_is_linux_x86_64_and_pinned() -> None:

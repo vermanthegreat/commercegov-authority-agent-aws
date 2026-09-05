@@ -112,8 +112,9 @@ The API uses `AWS_IAM`; unsigned callers cannot invoke the route. This is a
 replaceable P2 proof boundary, not the final CommerceGov OAuth design. The
 Lambda role can write only its one table, invoke only
 `global.anthropic.claude-sonnet-4-6` through its exact inference profile/model
-ARNs, and write only its own CloudWatch logs. It has no CommerceGov, Shopify,
-database, approval, Apply, secret-reading, or unrelated DynamoDB permission.
+ARNs, write only its own CloudWatch logs, and read only the inbound CommerceGov
+bearer secret used by `POST /events/operational`. It has no CommerceGov write,
+Shopify, database, approval, Apply, or unrelated DynamoDB permission.
 
 The single DynamoDB item uses:
 
@@ -159,6 +160,31 @@ uses SigV4 and the canonical synthetic fixture:
 python ./scripts/certify_hosted.py --endpoint <stack-output> --table <stack-output>
 ```
 
+## P3A live ingress compatibility
+
+P3A is not a new agent. It adds CommerceGov's existing operational ingress
+route to the certified P2 runtime:
+
+```text
+POST /events/operational
+  Authorization: Bearer <inbound secret>
+  -> same Lambda / P0 kernel / DynamoDB ledger as POST /assess
+```
+
+`POST /assess` remains AWS_IAM authenticated and behaviorally unchanged. The
+operational route disables API Gateway IAM (`Authorizer: NONE`) and validates
+the CommerceGov bearer in Lambda before any model, tool, or ledger write.
+Missing or wrong bearer requests fail closed and do not create a successful
+assessment record. Both routes share the same idempotency key and response
+adapter. Hosted operational certification:
+
+```powershell
+python ./scripts/certify_p3a.py --assess-endpoint <stack-output> --operational-endpoint <stack-output> --table <stack-output> --secret-arn <stack-output>
+```
+
+P3A does not add live CommerceGov read tools, OAuth, Review creation, or a
+Shopify-to-Review claim.
+
 ### Originality by phase
 
 PRE-EXISTING: CommerceGov governance platform, Shopify integration, policy
@@ -166,7 +192,8 @@ model, Review/approval/Apply workflow, and operational event concept.
 
 AWS HACKATHON WORK: P0 deterministic authority kernel; P1 Strands/Bedrock
 semantic assessment and bounded tools; P2 AWS Lambda/API runtime with durable
-DynamoDB idempotency and evidence. Live CommerceGov integration remains a later
+DynamoDB idempotency and evidence; P3A CommerceGov `POST /events/operational`
+ingress compatibility. Live read-only CommerceGov context remains a later
 phase.
 
 ## KNOWN_EXTERNAL_INTEGRATION_BLOCKER
@@ -177,4 +204,5 @@ reads a top-level `handoff_payload["scope_key"]`. P0 fixtures intentionally
 match the real producer contract and do not add the artificial top-level field.
 CommerceGov is not modified here; that mismatch requires a separately
 authorized change after this spine is stable. P2 neither fixes nor works around
-it and does not fabricate a top-level `scope_key`.
+it and does not fabricate a top-level `scope_key`. P3A also leaves that
+mismatch unfixed and does not claim a live Shopify-to-Review demonstration.
