@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: CommerceGov Authority Agent P2 runtime with P3A operational ingress
+Description: CommerceGov Authority Agent P2/P3A runtime with optional P3B live read context
 
 Parameters:
   EnvironmentName:
@@ -21,6 +21,10 @@ Parameters:
   RuntimeBuildId:
     Type: String
     Default: p2-candidate
+  CommerceGovBaseUrl:
+    Type: String
+    Default: ""
+    Description: Optional HTTPS CommerceGov origin for P3B live read-only context
 
 Resources:
   AuthorityTable:
@@ -125,6 +129,11 @@ Resources:
                 Action:
                   - secretsmanager:GetSecretValue
                 Resource: !Ref InboundBearerSecret
+              - Sid: ReadCommerceGovReadSecret
+                Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref CommerceGovReadSecret
       Tags:
         - Key: Project
           Value: commercegov-authority-agent-aws
@@ -147,12 +156,28 @@ Resources:
         - Key: Phase
           Value: P3A
 
+  CommerceGovReadSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Name: !Sub commercegov-authority-agent-${EnvironmentName}-commercegov-read
+      Description: Outbound CommerceGov read-only bearer for P3B live context
+      GenerateSecretString:
+        PasswordLength: 48
+        ExcludePunctuation: true
+      Tags:
+        - Key: Project
+          Value: commercegov-authority-agent-aws
+        - Key: Phase
+          Value: P3B
+
   AuthorityFunction:
     Type: AWS::Serverless::Function
     DependsOn: AuthorityFunctionLogGroup
     Properties:
       FunctionName: !Sub commercegov-authority-agent-${EnvironmentName}
-      Description: P2 authority runtime with P3A CommerceGov operational ingress
+      Description: P2/P3A runtime with optional P3B live CommerceGov read context
       CodeUri: .build/lambda/
       Handler: authority_agent.lambda_runtime.lambda_handler
       Runtime: python3.13
@@ -170,6 +195,8 @@ Resources:
           SEMANTIC_TIMEOUT_SECONDS: '24'
           RUNTIME_BUILD_ID: !Ref RuntimeBuildId
           INBOUND_BEARER_SECRET_ARN: !Ref InboundBearerSecret
+          COMMERCEGOV_BASE_URL: !Ref CommerceGovBaseUrl
+          COMMERCEGOV_READ_SECRET_ARN: !Ref CommerceGovReadSecret
           LOG_LEVEL: INFO
       Events:
         Assess:
@@ -190,7 +217,7 @@ Resources:
               Authorizer: NONE
       Tags:
         Project: commercegov-authority-agent-aws
-        Phase: P3A
+        Phase: P3B
 
 Outputs:
   ApiEndpoint:
@@ -202,6 +229,12 @@ Outputs:
   InboundBearerSecretArn:
     Description: Secrets Manager ARN for the inbound CommerceGov bearer
     Value: !Ref InboundBearerSecret
+  CommerceGovReadSecretArn:
+    Description: Secrets Manager ARN for the outbound CommerceGov read bearer
+    Value: !Ref CommerceGovReadSecret
+  ConfiguredCommerceGovBaseUrl:
+    Description: Configured CommerceGov HTTPS origin; empty disables live context
+    Value: !Ref CommerceGovBaseUrl
   LambdaArn:
     Value: !GetAtt AuthorityFunction.Arn
   DynamoDbTableName:

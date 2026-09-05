@@ -185,5 +185,12 @@ class AuthorityProcessor:
         }
         if semantic_status != "valid":
             evidence["error_category"] = "semantic_provider_error"
+        extra = getattr(self.semantic_provider, "context_evidence", None)
+        if isinstance(extra, Mapping):
+            for key, value in extra.items():
+                lowered = str(key).lower()
+                if value is None or any(part in lowered for part in ("token", "secret", "authorization", "bearer", "password")):
+                    continue
+                evidence[key] = value
         self.ledger.complete(event, request_hash, response, evidence)
         return HandlerResponse(200, response)

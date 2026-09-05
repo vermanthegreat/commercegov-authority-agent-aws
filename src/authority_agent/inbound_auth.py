@@ -56,6 +56,13 @@ def _parse_secret_string(secret_string: str) -> str:
     return text
 
 
+def secret_token_from_string(secret_string: str) -> str:
+    try:
+        return _parse_secret_string(secret_string)
+    except BearerAuthError as exc:
+        raise ValueError(exc.code) from exc
+
+
 class StaticBearerAuthenticator:
     def __init__(self, expected_token: str) -> None:
         if not expected_token:

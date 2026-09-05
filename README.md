@@ -185,6 +185,25 @@ python ./scripts/certify_p3a.py --assess-endpoint <stack-output> --operational-e
 P3A does not add live CommerceGov read tools, OAuth, Review creation, or a
 Shopify-to-Review claim.
 
+## P3B live read-only CommerceGov context
+
+P3B is opt-in and does not change `/assess`. When `COMMERCEGOV_BASE_URL` is an
+HTTPS origin and `COMMERCEGOV_READ_SECRET_ARN` is set, `POST /events/operational`
+reuses `CommerceGovReadClient` to fetch product content and effective policy
+before Bedrock. Incomplete live config keeps the certified synthetic context
+builder. The outbound read secret is separate from the inbound operational
+bearer. Context is information only; the P0 floor remains
+`AUTHORITY_AT_RISK / HUMAN_AUTHORITY_REQUIRED / STOP`. Evidence records
+`context_source=live_commercegov` plus bounded product/policy hashes, never
+tokens or full CommerceGov bodies.
+
+```powershell
+python ./scripts/certify_p3b.py --assess-endpoint <stack-output> --operational-endpoint <stack-output> --table <stack-output> --inbound-secret-arn <stack-output> --read-secret-arn <stack-output> --commercegov-base-url <https-origin>
+```
+
+If no valid CommerceGov read credential is available, hosted live proof is
+blocked and P2/P3A certification remains the deployed baseline.
+
 ### Originality by phase
 
 PRE-EXISTING: CommerceGov governance platform, Shopify integration, policy
@@ -193,8 +212,8 @@ model, Review/approval/Apply workflow, and operational event concept.
 AWS HACKATHON WORK: P0 deterministic authority kernel; P1 Strands/Bedrock
 semantic assessment and bounded tools; P2 AWS Lambda/API runtime with durable
 DynamoDB idempotency and evidence; P3A CommerceGov `POST /events/operational`
-ingress compatibility. Live read-only CommerceGov context remains a later
-phase.
+ingress compatibility; P3B optional live read-only CommerceGov context. The
+`scope_key` producer/consumer mismatch remains unfixed.
 
 ## KNOWN_EXTERNAL_INTEGRATION_BLOCKER
 
@@ -206,3 +225,4 @@ CommerceGov is not modified here; that mismatch requires a separately
 authorized change after this spine is stable. P2 neither fixes nor works around
 it and does not fabricate a top-level `scope_key`. P3A also leaves that
 mismatch unfixed and does not claim a live Shopify-to-Review demonstration.
+P3B also leaves that mismatch unfixed.

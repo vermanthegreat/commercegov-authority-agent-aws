@@ -24,6 +24,9 @@ def test_sam_template_defines_only_minimal_authenticated_runtime() -> None:
     assert "DefaultAuthorizer: AWS_IAM" in template
     assert "bedrock:InvokeModel" in template
     assert "global.anthropic.claude-sonnet-4-6" in template
+    assert "COMMERCEGOV_BASE_URL" in template
+    assert "COMMERCEGOV_READ_SECRET_ARN" in template
+    assert "commercegov-authority-agent-${EnvironmentName}-commercegov-read" in template
     assert "proposals:write" not in template
 
 

@@ -12,11 +12,24 @@ from typing import Any, Mapping
 
 import boto3
 
+from authority_agent.commercegov_read import CommerceGovReadClient, CommerceGovReadError
+from authority_agent.context_source import (
+    CONTEXT_SOURCE_LIVE,
+    CONTEXT_SOURCE_SYNTHETIC,
+    RecordingContextBuilder,
+)
 from authority_agent.dynamodb_ledger import DynamoDbIdempotencyLedger
 from authority_agent.handler import handle_payload
-from authority_agent.inbound_auth import BearerAuthError, BearerAuthenticator, SecretsManagerBearerAuthenticator
+from authority_agent.inbound_auth import (
+    BearerAuthError,
+    BearerAuthenticator,
+    SecretsManagerBearerAuthenticator,
+    secret_token_from_string,
+)
+from authority_agent.live_read_transport import LazyHttpsCommerceGovReadTransport
 from authority_agent.orchestration import AuthorityProcessor, TenantBindingRegistry
 from authority_agent.runtime_context import SyntheticProofContextBuilder
+from authority_agent.semantic_context import SemanticContextBuilder
 from authority_agent.strands_provider import DEFAULT_BEDROCK_MODEL_ID, StrandsSemanticProvider
 
 LOGGER = logging.getLogger("authority_agent.runtime")
@@ -38,6 +51,14 @@ class RuntimeConfig:
     semantic_timeout_seconds: float
     build_id: str
     inbound_bearer_secret_arn: str
+    commercegov_base_url: str = ""
+    commercegov_read_secret_arn: str = ""
+
+    @property
+    def live_context_enabled(self) -> bool:
+        url = self.commercegov_base_url.strip()
+        arn = self.commercegov_read_secret_arn.strip()
+        return bool(url) and bool(arn) and url.startswith("https://")
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> "RuntimeConfig":
@@ -66,15 +87,19 @@ class RuntimeConfig:
             semantic_timeout_seconds=timeout,
             build_id=values.get("RUNTIME_BUILD_ID", "unknown").strip() or "unknown",
             inbound_bearer_secret_arn=required["INBOUND_BEARER_SECRET_ARN"],
+            commercegov_base_url=values.get("COMMERCEGOV_BASE_URL", "").strip(),
+            commercegov_read_secret_arn=values.get("COMMERCEGOV_READ_SECRET_ARN", "").strip(),
         )
 
 
 class ObservedSemanticProvider:
     provider_name = "StrandsSemanticProvider"
 
-    def __init__(self, provider: StrandsSemanticProvider) -> None:
+    def __init__(self, provider: StrandsSemanticProvider, context_builder: Any) -> None:
         self._provider = provider
+        self._context_builder = context_builder
         self.model_id = provider.model_id
+        self.context_evidence: dict[str, Any] = dict(getattr(context_builder, "last_evidence", {}) or {})
 
     def assess(self, event):
         _safe_log(
@@ -83,42 +108,100 @@ class ObservedSemanticProvider:
             agency_id=event.agency_id,
             shop_id=event.shop_id,
             model_id=self.model_id,
+            context_source=self.context_evidence.get("context_source"),
         )
         try:
             result = self._provider.assess(event)
         except Exception as exc:
+            self.context_evidence = dict(getattr(self._context_builder, "last_evidence", {}) or {})
             _safe_log(
                 "semantic_assessment_failed",
                 event_id=event.event_id,
                 error_category=type(exc).__name__,
                 model_id=self.model_id,
+                context_source=self.context_evidence.get("context_source"),
+                read_status=self.context_evidence.get("read_status"),
             )
             raise
+        self.context_evidence = dict(getattr(self._context_builder, "last_evidence", {}) or {})
         _safe_log(
             "semantic_assessment_completed",
             event_id=event.event_id,
             semantic_classification=result.classification,
             model_id=self.model_id,
+            context_source=self.context_evidence.get("context_source"),
+            read_status=self.context_evidence.get("read_status"),
         )
         return result
 
 
-def build_processor(config: RuntimeConfig) -> AuthorityProcessor:
-    table = boto3.resource("dynamodb", region_name=config.region_name).Table(config.table_name)
-    ledger = DynamoDbIdempotencyLedger(table, build_id=config.build_id, logger=LOGGER)
-    provider = ObservedSemanticProvider(
+def _synthetic_builder() -> RecordingContextBuilder:
+    return RecordingContextBuilder(SyntheticProofContextBuilder(), CONTEXT_SOURCE_SYNTHETIC)
+
+
+def _live_builder(config: RuntimeConfig, secrets_client: Any) -> RecordingContextBuilder:
+    cached: dict[str, str] = {}
+
+    def load_token() -> str:
+        if "token" not in cached:
+            response = secrets_client.get_secret_value(SecretId=config.commercegov_read_secret_arn)
+            secret_string = response.get("SecretString")
+            if not isinstance(secret_string, str):
+                raise CommerceGovReadError("commercegov_read_failed")
+            cached["token"] = secret_token_from_string(secret_string)
+        return cached["token"]
+
+    transport = LazyHttpsCommerceGovReadTransport(
+        base_url=config.commercegov_base_url,
+        token_loader=load_token,
+        timeout_seconds=5.0,
+    )
+    return RecordingContextBuilder(
+        SemanticContextBuilder(CommerceGovReadClient(transport)),
+        CONTEXT_SOURCE_LIVE,
+    )
+
+
+def _semantic_provider(config: RuntimeConfig, context_builder: RecordingContextBuilder) -> ObservedSemanticProvider:
+    return ObservedSemanticProvider(
         StrandsSemanticProvider(
-            context_builder=SyntheticProofContextBuilder(),
+            context_builder=context_builder,
             model_id=config.model_id,
             region_name=config.region_name,
             timeout_seconds=config.semantic_timeout_seconds,
-        )
+        ),
+        context_builder,
     )
-    return AuthorityProcessor(
-        bindings=TenantBindingRegistry([(config.allowed_agency_id, config.allowed_shop_id)]),
+
+
+def build_processor(config: RuntimeConfig) -> AuthorityProcessor:
+    return build_processors(config)[0]
+
+
+def build_processors(
+    config: RuntimeConfig, *, secrets_client: Any | None = None
+) -> tuple[AuthorityProcessor, AuthorityProcessor]:
+    table = boto3.resource("dynamodb", region_name=config.region_name).Table(config.table_name)
+    ledger = DynamoDbIdempotencyLedger(table, build_id=config.build_id, logger=LOGGER)
+    bindings = TenantBindingRegistry([(config.allowed_agency_id, config.allowed_shop_id)])
+    synthetic_builder = _synthetic_builder()
+    assess_processor = AuthorityProcessor(
+        bindings=bindings,
         ledger=ledger,
-        semantic_provider=provider,
+        semantic_provider=_semantic_provider(config, synthetic_builder),
     )
+    if not config.live_context_enabled:
+        _safe_log("live_context_disabled", reason="incomplete_or_absent_live_config")
+        return assess_processor, assess_processor
+    client = secrets_client or boto3.client("secretsmanager", region_name=config.region_name)
+    live_builder = _live_builder(config, client)
+    operational_processor = AuthorityProcessor(
+        bindings=bindings,
+        ledger=ledger,
+        semantic_provider=_semantic_provider(config, live_builder),
+    )
+    _safe_log("live_context_enabled", context_source=CONTEXT_SOURCE_LIVE)
+    return assess_processor, operational_processor
 
 
 def _response(status_code: int, body: Mapping[str, Any], *, cached: bool = False) -> dict[str, Any]:
@@ -145,6 +228,7 @@ def handle_api_event(
     context: Any,
     processor: AuthorityProcessor,
     bearer_authenticator: BearerAuthenticator | None = None,
+    operational_processor: AuthorityProcessor | None = None,
 ) -> dict[str, Any]:
     started = monotonic()
     request_context = event.get("requestContext")
@@ -192,8 +276,11 @@ def handle_api_event(
         for key in ("event_id", "agency_id", "shop_id", "target_type", "target_id", "mutation_class")
     }
     _safe_log("request_received", request_id=request_id, **safe_identity)
+    selected = processor
+    if route_key == "POST /events/operational" and operational_processor is not None:
+        selected = operational_processor
     try:
-        result = handle_payload(processor, payload)
+        result = handle_payload(selected, payload)
     except Exception as exc:
         _safe_log(
             "request_failed",
@@ -217,16 +304,23 @@ def handle_api_event(
 
 
 _PROCESSOR: AuthorityProcessor | None = None
+_OPERATIONAL_PROCESSOR: AuthorityProcessor | None = None
 _BEARER_AUTHENTICATOR: SecretsManagerBearerAuthenticator | None = None
 
 
 def lambda_handler(event: Mapping[str, Any], context: Any) -> dict[str, Any]:
-    global _PROCESSOR, _BEARER_AUTHENTICATOR
-    if _PROCESSOR is None or _BEARER_AUTHENTICATOR is None:
+    global _PROCESSOR, _OPERATIONAL_PROCESSOR, _BEARER_AUTHENTICATOR
+    if _PROCESSOR is None or _OPERATIONAL_PROCESSOR is None or _BEARER_AUTHENTICATOR is None:
         config = RuntimeConfig.from_env()
-        _PROCESSOR = build_processor(config)
+        _PROCESSOR, _OPERATIONAL_PROCESSOR = build_processors(config)
         _BEARER_AUTHENTICATOR = SecretsManagerBearerAuthenticator(
             boto3.client("secretsmanager", region_name=config.region_name),
             config.inbound_bearer_secret_arn,
         )
-    return handle_api_event(event, context, _PROCESSOR, bearer_authenticator=_BEARER_AUTHENTICATOR)
+    return handle_api_event(
+        event,
+        context,
+        _PROCESSOR,
+        bearer_authenticator=_BEARER_AUTHENTICATOR,
+        operational_processor=_OPERATIONAL_PROCESSOR,
+    )
