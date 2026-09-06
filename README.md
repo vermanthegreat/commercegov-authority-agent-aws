@@ -226,3 +226,49 @@ authorized change after this spine is stable. P2 neither fixes nor works around
 it and does not fabricate a top-level `scope_key`. P3A also leaves that
 mismatch unfixed and does not claim a live Shopify-to-Review demonstration.
 P3B also leaves that mismatch unfixed.
+
+## P4 technical evidence
+
+P4 does not add approval, Apply, Shopify write, CommerceGov write, or AgentCore.
+It hardens the already-certified authority agent:
+
+- P4A: bounded CommerceGov OAuth refresh (`shops:read products:read policy:read`)
+- P4B: public judge demo (`GET /demo`, `POST /demo/run`) with a server-owned fixture
+- P4C: evaluation matrix, `AuthorityAssessmentEvidenceV1` presentation, and Strands lifecycle logs
+
+Architecture:
+
+```text
+Judge demo fixture (not itself “live”)
+  -> live CommerceGov product/policy reads
+  -> Strands 1.54.0 / Amazon Bedrock semantic assessment (advisory)
+  -> deterministic authority floor
+  -> AUTHORITY_AT_RISK / HUMAN_AUTHORITY_REQUIRED / STOP
+  -> DynamoDB evidence (canonical) + public-safe HTML projection
+```
+
+Strands/Bedrock may recommend. Deterministic application code decides whether
+autonomous processing may continue. The model cannot grant itself authority.
+
+Certified public target:
+
+- shop `controlled-demo.myshopify.com`
+- product Gift Card `7887756099661`
+- mutation `product.title`
+- demo `https://40k4yk7gh2.execute-api.us-east-1.amazonaws.com/p2/demo`
+
+CommerceGov is pre-existing infrastructure. This AWS Strands authority agent is
+the hackathon project.
+
+Evaluate locally:
+
+```powershell
+py -3.13 ./scripts/evaluate_p4.py
+```
+
+Reports: `evidence/p4/P4_EVALUATION.md` and `evidence/p4/P4_EVALUATION.json`.
+The matrix covers 26 authority properties (ingress, tenant binding, OAuth
+expiry/refresh failure, provider fail-closed, model-downgrade floor, duplicates,
+live hash binding, secret-leak projection, bounded demo). Concurrent production
+refresh races and intentional Bedrock destruction are classified
+`HOSTED_NOT_FORCED_FOR_SAFETY` and proven with local fixtures.

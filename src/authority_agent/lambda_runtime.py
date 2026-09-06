@@ -31,6 +31,7 @@ from authority_agent.oauth_credentials import CommerceGovOAuthCredentialManager
 from authority_agent.orchestration import AuthorityProcessor, TenantBindingRegistry
 from authority_agent.runtime_context import SyntheticProofContextBuilder
 from authority_agent.semantic_context import SemanticContextBuilder
+from authority_agent.strands_observability import bind_semantic_correlation, reset_semantic_correlation
 from authority_agent.strands_provider import DEFAULT_BEDROCK_MODEL_ID, StrandsSemanticProvider
 
 LOGGER = logging.getLogger("authority_agent.runtime")
@@ -247,6 +248,36 @@ def handle_api_event(
     request_context = event.get("requestContext")
     if not isinstance(request_context, Mapping):
         return _response(400, {"error": "invalid_api_gateway_request", "terminal_status": "FAIL_CLOSED"})
+    token = bind_semantic_correlation(
+        api_request_id=str(request_context.get("requestId") or ""),
+        lambda_request_id=str(getattr(context, "aws_request_id", "") or ""),
+    )
+    try:
+        return _dispatch_api_event(
+            event,
+            context,
+            processor,
+            bearer_authenticator=bearer_authenticator,
+            operational_processor=operational_processor,
+            demo_settings=demo_settings,
+            request_context=request_context,
+            started=started,
+        )
+    finally:
+        reset_semantic_correlation(token)
+
+
+def _dispatch_api_event(
+    event: Mapping[str, Any],
+    context: Any,
+    processor: AuthorityProcessor,
+    *,
+    bearer_authenticator: BearerAuthenticator | None,
+    operational_processor: AuthorityProcessor | None,
+    demo_settings: DemoSettings | None,
+    request_context: Mapping[str, Any],
+    started: float,
+) -> dict[str, Any]:
     http = request_context.get("http")
     method = http.get("method") if isinstance(http, Mapping) else None
     route_key = event.get("routeKey") or request_context.get("routeKey")
@@ -257,6 +288,11 @@ def handle_api_event(
             agency_id="",
             shop_id="",
             product_id="7887756099661",
+        )
+        _safe_log(
+            "request_received",
+            request_id=request_context.get("requestId") or getattr(context, "aws_request_id", "unknown"),
+            route="demo",
         )
         return handle_demo_request(event, selected, settings)
     if method != "POST":

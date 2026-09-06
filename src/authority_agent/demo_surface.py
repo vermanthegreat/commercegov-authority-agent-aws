@@ -9,6 +9,7 @@ import json
 from typing import Any, Callable, Mapping
 from urllib.parse import parse_qsl
 
+from authority_agent.evidence_view import bound_semantic_summary, project_assessment_evidence
 from authority_agent.handler import handle_payload
 from authority_agent.orchestration import AuthorityProcessor
 
@@ -129,6 +130,7 @@ def render_landing() -> str:
         "<div>6. Autonomous processing <b>stops</b>.</div>"
         "</div>"
         "<section><h2>Operational Event</h2><dl>"
+        "<dt>Source</dt><dd>JUDGE DEMO FIXTURE</dd>"
         "<dt>Shop</dt><dd>controlled-demo.myshopify.com</dd>"
         f"<dt>Product</dt><dd>{escape(DEMO_PRODUCT_TITLE)}</dd>"
         f"<dt>Product ID</dt><dd>{escape(DEMO_PRODUCT_ID)}</dd>"
@@ -137,31 +139,26 @@ def render_landing() -> str:
         "<form method=\"post\" action=\"demo/run\">"
         "<p><button type=\"submit\">Run Authority Assessment</button></p>"
         "</form>"
-        "<p class=\"note\">This page cannot approve, apply, write Shopify, or change policy. "
+        "<p class=\"note\">The operational event is a judge demo fixture. "
+        "Governed product and policy context is live CommerceGov. "
+        "This page cannot approve, apply, write Shopify, or change policy. "
         "The target is fixed. You cannot submit an event or a prompt.</p>"
         "</section>"
     )
     return _page("CommerceGov Authority Agent", inner)
 
 
-def _abbrev(value: Any) -> str:
-    text = str(value or "").strip()
-    if not text:
-        return ""
-    if text.startswith("sha256:"):
-        text = text[7:]
-    return text[:12]
-
-
 def _semantic_unavailable(processor: AuthorityProcessor, cached: bool) -> bool:
     if cached:
-        return False
+        evidence = getattr(processor, "last_evidence", None) or {}
+        return evidence.get("semantic_status") == "provider_error"
     provider = processor.semantic_provider
     if getattr(provider, "error", None) is not None:
         return True
     if getattr(provider, "last_semantic_ok", None) is False:
         return True
-    return False
+    evidence = getattr(processor, "last_evidence", None) or {}
+    return evidence.get("semantic_status") == "provider_error"
 
 
 def render_result(
@@ -170,75 +167,100 @@ def render_result(
     cached: bool,
     processor: AuthorityProcessor,
 ) -> str:
-    classification = str(body.get("intelligence_classification") or "")
-    status = str(body.get("status") or "")
-    shop = str(body.get("shop_id") or "")
-    product_id = str(body.get("target_id") or "")
-    mutation = str(body.get("mutation_class") or "")
-    event_id = str(body.get("event_id") or "")
-    extra = getattr(processor.semantic_provider, "context_evidence", None)
-    context_source = ""
-    read_status = ""
-    product_hash = ""
-    policy_hash = ""
-    if not cached and isinstance(extra, Mapping):
-        context_source = str(extra.get("context_source") or "")
-        read_status = str(extra.get("read_status") or "")
-        product_hash = _abbrev(extra.get("product_context_hash"))
-        policy_hash = _abbrev(extra.get("policy_hash"))
+    claim = getattr(processor, "last_claim", None)
+    extra = getattr(processor, "last_evidence", None)
+    context = getattr(processor.semantic_provider, "context_evidence", None)
+    view = project_assessment_evidence(
+        body=body,
+        cached=cached,
+        context_evidence=None if cached else (context if isinstance(context, Mapping) else None),
+        ledger_evidence=extra if isinstance(extra, Mapping) else None,
+        evidence_id=getattr(claim, "evidence_id", None),
+        execution_id=getattr(claim, "execution_id", None),
+        event_source="judge_demo_fixture",
+        product_title=DEMO_PRODUCT_TITLE,
+    )
     unavailable = _semantic_unavailable(processor, cached)
-    semantic_label = "PROVIDER UNAVAILABLE" if unavailable else "PASS"
-    context_rows = ""
-    if context_source or read_status or product_hash or policy_hash:
-        product_state = "PASS" if (read_status in {"ok", "success", ""} and context_source) or product_hash else ""
-        policy_state = "PASS" if (read_status in {"ok", "success", ""} and context_source) or policy_hash else ""
-        context_rows = (
-            (f"<dt>Product</dt><dd class=\"ok\">{escape(product_state or read_status)}</dd>" if product_state or read_status else "")
-            + (f"<dt>Policy</dt><dd class=\"ok\">{escape(policy_state or read_status)}</dd>" if policy_state or read_status else "")
-            + (f"<dt>Source</dt><dd>{escape(context_source)}</dd>" if context_source else "")
-            + (f"<dt>Read status</dt><dd>{escape(read_status)}</dd>" if read_status else "")
-            + (f"<dt>Product hash</dt><dd>{escape(product_hash)}</dd>" if product_hash else "")
-            + (f"<dt>Policy hash</dt><dd>{escape(policy_hash)}</dd>" if policy_hash else "")
-        )
-    else:
-        context_rows = (
-            "<dt>Source</dt><dd>server-owned live path</dd>"
-            "<dt>Detail</dt><dd>Hashes are shown when this runtime records live read evidence.</dd>"
-        )
+    live = view.get("live_context") or {}
+    semantic = view.get("semantic") or {}
+    authority = view.get("authority") or {}
+    event = view.get("event") or {}
+    execution_label = "CACHED — IDEMPOTENT REPLAY" if cached else "LIVE ASSESSMENT"
+    live_source = str(live.get("source") or "")
+    live_source_label = "LIVE COMMERCEGOV" if live_source == "live_commercegov" else (live_source or "not recorded on this replay")
+    product_read = "PASS" if live.get("product_read") in {"ok", "success"} or live.get("product_context_hash") else (str(live.get("product_read") or "not recorded on this replay"))
+    policy_read = "PASS" if live.get("policy_read") in {"ok", "success"} or live.get("policy_hash") else (str(live.get("policy_read") or "not recorded on this replay"))
+    semantic_status = "PROVIDER ERROR" if unavailable else ("PASS" if semantic.get("status") == "valid" or not unavailable else "UNKNOWN")
+    if unavailable:
+        semantic_status = "PROVIDER ERROR"
+    elif semantic.get("status") == "valid":
+        semantic_status = "PASS"
+    elif cached and not unavailable:
+        semantic_status = str(semantic.get("status") or "PASS")
+        if semantic_status == "valid":
+            semantic_status = "PASS"
+    summary = bound_semantic_summary(semantic.get("summary")) or ("unavailable" if unavailable else "")
+    semantic_class = str(semantic.get("classification") or ("unavailable" if unavailable else "not recorded"))
+    fail_copy = (
+        "<p class=\"note\">The semantic provider did not complete successfully. "
+        "The authority boundary therefore prevented autonomous continuation.</p>"
+        if unavailable
+        else ""
+    )
+    evidence_id = (view.get("evidence") or {}).get("evidence_id")
+    evidence_row = (
+        f"<dt>Evidence ID</dt><dd>{escape(str(evidence_id))}</dd>" if evidence_id else ""
+    )
     inner = (
         "<h1>CommerceGov Authority Agent</h1>"
         "<p class=\"lede\">AI can reason. Humans retain authority.</p>"
+        "<div class=\"story\">"
+        "<div>Semantic assessment is advisory.</div>"
+        "<div>Deterministic authority decides whether processing may continue.</div>"
+        "</div>"
         "<section><h2>Operational Event</h2><dl>"
-        f"<dt>Event</dt><dd>{escape(event_id)}</dd>"
+        "<dt>Source</dt><dd>JUDGE DEMO FIXTURE</dd>"
+        f"<dt>Event</dt><dd>{escape(str(event.get('event_id') or ''))}</dd>"
         "<dt>Event type</dt><dd>EXTERNAL_PRODUCTION_CHANGE_DETECTED</dd>"
-        f"<dt>Shop</dt><dd>{escape(shop)}</dd>"
+        f"<dt>Shop</dt><dd>{escape(str(event.get('shop') or ''))}</dd>"
         f"<dt>Product</dt><dd>{escape(DEMO_PRODUCT_TITLE)}</dd>"
-        f"<dt>Product ID</dt><dd>{escape(product_id)}</dd>"
-        f"<dt>Mutation</dt><dd>{escape(mutation)}</dd>"
-        f"<dt>Result source</dt><dd>{escape('cached ledger' if cached else 'live assessment')}</dd>"
+        f"<dt>Product ID</dt><dd>{escape(str(event.get('product_id') or ''))}</dd>"
+        f"<dt>Mutation</dt><dd>{escape(str(event.get('mutation_class') or ''))}</dd>"
+        f"<dt>Execution</dt><dd>{escape(execution_label)}</dd>"
         "</dl></section>"
-        "<section><h2>Live Context</h2><dl>"
-        f"{context_rows}"
-        "</dl></section>"
-        "<section><h2>Strands / Bedrock</h2><dl>"
-        "<dt>Provider</dt><dd>Strands</dd>"
+        "<section><h2>Live Governed Context</h2><dl>"
+        f"<dt>Source</dt><dd>{escape(live_source_label)}</dd>"
+        f"<dt>Product read</dt><dd>{escape(product_read)}</dd>"
+        f"<dt>Policy read</dt><dd>{escape(policy_read)}</dd>"
+        + (f"<dt>Product context hash</dt><dd>{escape(str(live.get('product_context_hash')))}</dd>" if live.get("product_context_hash") else "")
+        + (f"<dt>Policy hash</dt><dd>{escape(str(live.get('policy_hash')))}</dd>" if live.get("policy_hash") else "")
+        + "</dl></section>"
+        "<section><h2>Strands / Amazon Bedrock</h2><dl>"
+        "<dt>Provider</dt><dd>Strands Agents SDK</dd>"
         "<dt>Model</dt><dd>Claude Sonnet 4.6</dd>"
-        f"<dt>Assessment</dt><dd>{escape(semantic_label)}</dd>"
-        "</dl></section>"
-        "<section><h2>Authority</h2><dl>"
-        f"<dt>Classification</dt><dd class=\"risk\">{escape(classification)}</dd>"
-        f"<dt>Human authority</dt><dd class=\"risk\">REQUIRED</dd>"
-        f"<dt>Autonomous processing</dt><dd class=\"stop\">STOPPED</dd>"
-        f"<dt>Terminal status</dt><dd>{escape(status)}</dd>"
-        f"<dt>Summary</dt><dd>{escape(str(body.get('summary') or ''))}</dd>"
+        "<dt>Role</dt><dd>SEMANTIC ASSESSMENT</dd>"
+        f"<dt>Semantic status</dt><dd>{escape(semantic_status)}</dd>"
+        f"<dt>Assessment</dt><dd>{escape(semantic_class)}</dd>"
+        f"<dt>MODEL ASSESSMENT</dt><dd>{escape(summary)}</dd>"
+        "</dl>"
+        f"{fail_copy}"
+        "</section>"
+        "<section><h2>Deterministic Authority</h2><dl>"
+        "<dt>Role</dt><dd>FINAL AUTHORITY DECISION</dd>"
+        f"<dt>Classification</dt><dd class=\"risk\">{escape(str(authority.get('classification') or ''))}</dd>"
+        "<dt>Human authority</dt><dd class=\"risk\">REQUIRED</dd>"
+        "<dt>Autonomous processing</dt><dd class=\"stop\">STOPPED</dd>"
+        f"<dt>Terminal state</dt><dd>{escape(str(authority.get('terminal_status') or ''))}</dd>"
         "</dl></section>"
         "<section><h2>Evidence</h2><dl>"
-        "<dt>Durable evidence</dt><dd>PERSISTED</dd>"
+        "<dt>Durable record</dt><dd>PERSISTED</dd>"
+        f"{evidence_row}"
         "</dl>"
+        "<p class=\"note\">Agent capabilities: Read · Assess · Explain · Stop. "
+        "Not exposed: Approve · Apply · Shopify Write.</p>"
         "<form method=\"post\" action=\"\">"
         "<p><button type=\"submit\">Run Authority Assessment</button></p>"
         "</form>"
-        "<p class=\"note\">No approval or Apply control is offered. Shopify is not written.</p>"
         "</section>"
     )
     return _page("CommerceGov Authority Agent — Result", inner)
@@ -248,10 +270,14 @@ def render_error(message: str) -> str:
     inner = (
         "<h1>CommerceGov Authority Agent</h1>"
         "<p class=\"lede\">AI can reason. Humans retain authority.</p>"
-        "<section><h2>Assessment unavailable</h2>"
+        "<section><h2>Fail-closed authority</h2>"
         f"<p>{escape(message)}</p>"
+        "<p class=\"note\">The semantic provider did not complete successfully. "
+        "The authority boundary therefore prevented autonomous continuation.</p>"
         "<dl>"
-        "<dt>Authority</dt><dd class=\"risk\">HUMAN AUTHORITY REQUIRED</dd>"
+        "<dt>Model / provider</dt><dd>UNAVAILABLE</dd>"
+        "<dt>Deterministic authority</dt><dd>FAIL-CLOSED</dd>"
+        "<dt>Human authority</dt><dd class=\"risk\">REQUIRED</dd>"
         "<dt>Autonomous processing</dt><dd class=\"stop\">STOPPED</dd>"
         "</dl></section>"
     )
@@ -306,6 +332,9 @@ def handle_demo_request(
         return _html_response(404, render_error("Demo is not enabled."))
     if settings.product_id != DEMO_PRODUCT_ID:
         return _html_response(500, render_error("Demo configuration is invalid."))
+    rejected = caller_input_rejected(event)
+    if rejected:
+        return _html_response(400, render_error("This demo does not accept caller input."))
     route_key = str(event.get("routeKey") or "")
     request_context = event.get("requestContext") if isinstance(event.get("requestContext"), Mapping) else {}
     http = request_context.get("http") if isinstance(request_context, Mapping) else {}
@@ -315,9 +344,6 @@ def handle_demo_request(
         return _html_response(200, page)
     if route_key != "POST /demo/run" and not (method == "POST" and str(event.get("rawPath") or "").endswith("/demo/run")):
         return _html_response(405, render_error("Unsupported demo route."))
-    rejected = caller_input_rejected(event)
-    if rejected:
-        return _html_response(400, render_error("This demo does not accept caller input."))
     event_id = demo_event_id(settings.clock())
     payload = build_demo_payload(settings, event_id)
     try:

@@ -65,6 +65,7 @@ def test_get_demo_returns_secured_html() -> None:
     assert response["headers"]["cache-control"] == "no-store"
     assert "https://" not in html
     assert "<script" not in html.lower()
+    assert "JUDGE DEMO FIXTURE" in html
     assert "Run Authority Assessment" in html
     assert "Approve" not in html
     assert ">Apply<" not in html
@@ -92,6 +93,11 @@ def test_empty_run_uses_server_fixture_and_authority_floor() -> None:
     assert "STOPPED" in html
     assert "<script>alert(1)</script>" not in html
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+    assert "JUDGE DEMO FIXTURE" in html
+    assert "LIVE ASSESSMENT" in html
+    assert "SEMANTIC ASSESSMENT" in html
+    assert "FINAL AUTHORITY DECISION" in html
+    assert "MODEL ASSESSMENT" in html
     assert provider.calls == 1
 
 
@@ -127,7 +133,7 @@ def test_same_bucket_is_cached_and_next_bucket_is_new() -> None:
     third = invoke(demo_run(), processor, demo)
     assert first["statusCode"] == second["statusCode"] == third["statusCode"] == 200
     assert "judge-demo-v1-20260906-1200" in first["body"]
-    assert "cached ledger" in second["body"]
+    assert "CACHED — IDEMPOTENT REPLAY" in second["body"]
     assert "judge-demo-v1-20260906-1205" in third["body"]
     assert provider.calls == 2
 
@@ -137,7 +143,8 @@ def test_provider_failure_still_renders_fail_closed() -> None:
     response = invoke(demo_run(), processor, settings())
     html = response["body"]
     assert response["statusCode"] == 200
-    assert "PROVIDER UNAVAILABLE" in html
+    assert "PROVIDER ERROR" in html
+    assert "The semantic provider did not complete successfully" in html
     assert "AUTHORITY_AT_RISK" in html
     assert "REQUIRED" in html
     assert "STOPPED" in html

@@ -1,0 +1,201 @@
+{
+  "cases": [
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "01",
+      "property": "Valid operational event",
+      "result": "PASS",
+      "test": "test_01_valid_operational_event"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "02",
+      "property": "Unauthorized ingress blocked",
+      "result": "PASS",
+      "test": "test_02_wrong_inbound_bearer"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "03",
+      "property": "Wrong agency blocked",
+      "result": "PASS",
+      "test": "test_03_wrong_agency"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "04",
+      "property": "Wrong shop blocked",
+      "result": "PASS",
+      "test": "test_04_wrong_shop"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "05",
+      "property": "Wrong product / target blocked",
+      "result": "PASS",
+      "test": "test_05_wrong_product_target"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "06",
+      "property": "Missing CommerceGov context fails closed",
+      "result": "PASS",
+      "test": "test_06_missing_commercegov_context"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "07",
+      "property": "CommerceGov timeout fails closed",
+      "result": "PASS",
+      "test": "test_07_commercegov_timeout"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "08",
+      "property": "OAuth expiry recovery",
+      "result": "PASS",
+      "test": "test_08_oauth_access_token_expiry_recovery"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "09",
+      "property": "OAuth refresh failure fails closed",
+      "result": "PASS",
+      "test": "test_09_oauth_refresh_failure"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "10",
+      "property": "Bedrock timeout fails closed",
+      "result": "PASS",
+      "test": "test_10_bedrock_timeout"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "11",
+      "property": "Provider failure fails closed",
+      "result": "PASS",
+      "test": "test_11_bedrock_provider_error"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "12",
+      "property": "Model downgrade protection",
+      "result": "PASS",
+      "test": "test_12_model_downgrade_protection_fixture"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "13",
+      "property": "Duplicate handling",
+      "result": "PASS",
+      "test": "test_13_duplicate_event"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "14",
+      "property": "Conflict handling",
+      "result": "PASS",
+      "test": "test_14_conflicting_duplicate"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "15",
+      "property": "Malformed event blocked",
+      "result": "PASS",
+      "test": "test_15_malformed_event"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "16",
+      "property": "Cross-tenant substitution blocked",
+      "result": "PASS",
+      "test": "test_16_cross_tenant_context_substitution"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "17",
+      "property": "Access-token leak check",
+      "result": "PASS",
+      "test": "test_17_access_token_leakage_blocked"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "18",
+      "property": "Refresh-token leak check",
+      "result": "PASS",
+      "test": "test_18_refresh_token_leakage_blocked"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "19",
+      "property": "Live product-context hash",
+      "result": "PASS",
+      "test": "test_19_live_product_context_hash"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "20",
+      "property": "Live policy hash",
+      "result": "PASS",
+      "test": "test_20_live_policy_hash"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "21",
+      "property": "Synthetic context not labeled live",
+      "result": "PASS",
+      "test": "test_21_synthetic_context_not_labeled_live"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "22",
+      "property": "Final HUMAN_AUTHORITY_REQUIRED",
+      "result": "PASS",
+      "test": "test_22_final_human_authority_required"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "23",
+      "property": "Final STOP",
+      "result": "PASS",
+      "test": "test_23_final_stop"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "24",
+      "property": "Public demo target bounded (query)",
+      "result": "PASS",
+      "test": "test_24_public_demo_rejects_arbitrary_query"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "25",
+      "property": "Public demo target bounded (body)",
+      "result": "PASS",
+      "test": "test_25_public_demo_rejects_arbitrary_body"
+    },
+    {
+      "classification": "LOCAL_DETERMINISTIC",
+      "id": "26",
+      "property": "Same demo bucket does not call Bedrock twice",
+      "result": "PASS",
+      "test": "test_26_same_demo_bucket_does_not_call_bedrock_twice"
+    }
+  ],
+  "fail_count": 0,
+  "fixture": "MODEL_DOWNGRADE_PROTECTION",
+  "hosted_not_forced_for_safety": [
+    "concurrent OAuth refresh rotation against production",
+    "intentional Bedrock/provider destruction against production"
+  ],
+  "hosted_safe": [
+    "GET /demo",
+    "POST /demo/run empty form",
+    "same-bucket idempotent replay"
+  ],
+  "overall": "PASS",
+  "pass_count": 26,
+  "pytest_returncode": 0,
+  "schema": "CommerceGovP4EvaluationV1"
+}

@@ -20,6 +20,7 @@ from authority_agent.contracts import (
 from authority_agent.deterministic_control import enforce_authority_boundary
 from authority_agent.normalization import canonical_shop_domain, normalize_commercegov_event
 from authority_agent.response_adapter import to_commercegov_response
+from authority_agent.strands_observability import bind_semantic_correlation
 
 
 class TenantBindingRegistry:
@@ -141,12 +142,20 @@ class AuthorityProcessor:
         self.bindings = bindings
         self.ledger = ledger
         self.semantic_provider = semantic_provider
+        self.last_claim: ClaimResult | None = None
+        self.last_evidence: dict[str, Any] | None = None
 
     def process(self, payload: Mapping[str, Any]) -> HandlerResponse:
         event = normalize_commercegov_event(payload)
         self.bindings.require(event)
         request_hash = canonical_request_hash(event)
         claim = self.ledger.claim(event, request_hash)
+        self.last_claim = claim
+        bind_semantic_correlation(
+            event_id=event.event_id,
+            execution_id=claim.execution_id or "",
+            evidence_id=claim.evidence_id or "",
+        )
         if claim.cached_response is not None:
             return HandlerResponse(200, claim.cached_response, cached=True)
 
@@ -192,5 +201,6 @@ class AuthorityProcessor:
                 if value is None or any(part in lowered for part in ("token", "secret", "authorization", "bearer", "password")):
                     continue
                 evidence[key] = value
+        self.last_evidence = evidence
         self.ledger.complete(event, request_hash, response, evidence)
         return HandlerResponse(200, response)

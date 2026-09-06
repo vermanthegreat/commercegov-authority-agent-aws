@@ -13,6 +13,7 @@ from strands.types.exceptions import StructuredOutputException
 
 from authority_agent.contracts import AuthorityEvent, SemanticAssessment
 from authority_agent.semantic_context import ReadOnlyToolRegistry, SemanticContextBuilder
+from authority_agent.strands_observability import SafeStrandsHooks, bind_semantic_correlation, reset_semantic_correlation
 
 STRANDS_VERSION = "1.54.0"
 DEFAULT_BEDROCK_MODEL_ID = "global.anthropic.claude-sonnet-4-6"
@@ -89,6 +90,7 @@ def _default_agent_factory(
             system_prompt=SYSTEM_INSTRUCTION,
             callback_handler=None,
             load_tools_from_directory=False,
+            hooks=[SafeStrandsHooks()],
         )
 
     return build
@@ -116,6 +118,7 @@ class StrandsSemanticProvider:
         self._timeout_seconds = timeout_seconds
 
     def assess(self, event: AuthorityEvent) -> SemanticAssessment:
+        token = bind_semantic_correlation(event_id=event.event_id, model_id=self.model_id)
         try:
             context, governance, policy = self._context_builder.build(event)
             tools = ReadOnlyToolRegistry(event, governance, policy).as_strands_tools()
@@ -147,6 +150,8 @@ class StrandsSemanticProvider:
             raise SemanticProviderFailure("invalid_structured_semantic_output") from exc
         except Exception as exc:
             raise SemanticProviderFailure("semantic_provider_failed") from exc
+        finally:
+            reset_semantic_correlation(token)
         return SemanticAssessment(
             classification=validated.classification,
             summary=validated.summary,
