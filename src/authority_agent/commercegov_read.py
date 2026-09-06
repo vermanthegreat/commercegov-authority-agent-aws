@@ -18,6 +18,11 @@ class CommerceGovReadError(RuntimeError):
         self.code = code
 
 
+class CommerceGovTokenExpiredError(CommerceGovReadError):
+    def __init__(self) -> None:
+        super().__init__("commercegov_token_expired")
+
+
 class CommerceGovReadTransport(Protocol):
     def get_json(self, path: str) -> Mapping[str, Any]:
         ...
@@ -45,10 +50,20 @@ class HttpxCommerceGovReadTransport:
                 timeout=self._timeout,
                 follow_redirects=False,
             )
+            if response.status_code == 401:
+                try:
+                    error_payload = response.json()
+                except ValueError:
+                    error_payload = None
+                error_detail = error_payload.get("error") if isinstance(error_payload, Mapping) else None
+                if isinstance(error_detail, Mapping) and error_detail.get("code") == "token_expired":
+                    raise CommerceGovTokenExpiredError()
             response.raise_for_status()
             payload = response.json()
-        except (httpx.HTTPError, ValueError) as exc:
-            raise CommerceGovReadError("commercegov_read_failed") from exc
+        except CommerceGovTokenExpiredError:
+            raise
+        except (httpx.HTTPError, ValueError):
+            raise CommerceGovReadError("commercegov_read_failed") from None
         if not isinstance(payload, Mapping):
             raise CommerceGovReadError("commercegov_read_invalid_json")
         return payload

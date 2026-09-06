@@ -12,7 +12,7 @@ from typing import Any, Mapping
 
 import boto3
 
-from authority_agent.commercegov_read import CommerceGovReadClient, CommerceGovReadError
+from authority_agent.commercegov_read import CommerceGovReadClient
 from authority_agent.context_source import (
     CONTEXT_SOURCE_LIVE,
     CONTEXT_SOURCE_SYNTHETIC,
@@ -24,9 +24,9 @@ from authority_agent.inbound_auth import (
     BearerAuthError,
     BearerAuthenticator,
     SecretsManagerBearerAuthenticator,
-    secret_token_from_string,
 )
 from authority_agent.live_read_transport import LazyHttpsCommerceGovReadTransport
+from authority_agent.oauth_credentials import CommerceGovOAuthCredentialManager
 from authority_agent.orchestration import AuthorityProcessor, TenantBindingRegistry
 from authority_agent.runtime_context import SyntheticProofContextBuilder
 from authority_agent.semantic_context import SemanticContextBuilder
@@ -139,21 +139,21 @@ def _synthetic_builder() -> RecordingContextBuilder:
     return RecordingContextBuilder(SyntheticProofContextBuilder(), CONTEXT_SOURCE_SYNTHETIC)
 
 
-def _live_builder(config: RuntimeConfig, secrets_client: Any) -> RecordingContextBuilder:
-    cached: dict[str, str] = {}
-
-    def load_token() -> str:
-        if "token" not in cached:
-            response = secrets_client.get_secret_value(SecretId=config.commercegov_read_secret_arn)
-            secret_string = response.get("SecretString")
-            if not isinstance(secret_string, str):
-                raise CommerceGovReadError("commercegov_read_failed")
-            cached["token"] = secret_token_from_string(secret_string)
-        return cached["token"]
-
+def _live_builder(
+    config: RuntimeConfig,
+    secrets_client: Any,
+    lease_table: Any,
+) -> RecordingContextBuilder:
+    credential_manager = CommerceGovOAuthCredentialManager(
+        base_url=config.commercegov_base_url,
+        secret_arn=config.commercegov_read_secret_arn,
+        secrets_client=secrets_client,
+        lease_table=lease_table,
+        logger=LOGGER,
+    )
     transport = LazyHttpsCommerceGovReadTransport(
         base_url=config.commercegov_base_url,
-        token_loader=load_token,
+        credential_manager=credential_manager,
         timeout_seconds=5.0,
     )
     return RecordingContextBuilder(
@@ -194,7 +194,7 @@ def build_processors(
         _safe_log("live_context_disabled", reason="incomplete_or_absent_live_config")
         return assess_processor, assess_processor
     client = secrets_client or boto3.client("secretsmanager", region_name=config.region_name)
-    live_builder = _live_builder(config, client)
+    live_builder = _live_builder(config, client, table)
     operational_processor = AuthorityProcessor(
         bindings=bindings,
         ledger=ledger,
