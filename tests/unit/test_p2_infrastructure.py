@@ -19,6 +19,9 @@ def test_sam_template_defines_only_minimal_authenticated_runtime() -> None:
     assert "secretsmanager:GetSecretValue" in template
     assert "secretsmanager:*" not in template
     assert "Path: /events/operational" in template
+    assert "Path: /demo" in template
+    assert "Path: /demo/run" in template
+    assert "DEMO_PRODUCT_ID: '7887756099661'" in template
     assert "Authorizer: NONE" in template
     assert "Path: /assess" in template
     assert "DefaultAuthorizer: AWS_IAM" in template

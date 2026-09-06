@@ -18,6 +18,7 @@ from authority_agent.context_source import (
     CONTEXT_SOURCE_SYNTHETIC,
     RecordingContextBuilder,
 )
+from authority_agent.demo_surface import DemoSettings, handle_demo_request
 from authority_agent.dynamodb_ledger import DynamoDbIdempotencyLedger
 from authority_agent.handler import handle_payload
 from authority_agent.inbound_auth import (
@@ -53,6 +54,8 @@ class RuntimeConfig:
     inbound_bearer_secret_arn: str
     commercegov_base_url: str = ""
     commercegov_read_secret_arn: str = ""
+    demo_enabled: bool = True
+    demo_product_id: str = "7887756099661"
 
     @property
     def live_context_enabled(self) -> bool:
@@ -78,6 +81,10 @@ class RuntimeConfig:
         model_id = values.get("BEDROCK_MODEL_ID", DEFAULT_BEDROCK_MODEL_ID).strip()
         if model_id != DEFAULT_BEDROCK_MODEL_ID:
             raise ValueError("unapproved_bedrock_model")
+        demo_flag = values.get("DEMO_ENABLED", "true").strip().lower()
+        demo_product_id = values.get("DEMO_PRODUCT_ID", "7887756099661").strip() or "7887756099661"
+        if demo_product_id != "7887756099661":
+            raise ValueError("unapproved_demo_product")
         return cls(
             table_name=required["AUTHORITY_TABLE_NAME"],
             allowed_agency_id=required["ALLOWED_AGENCY_ID"],
@@ -89,6 +96,8 @@ class RuntimeConfig:
             inbound_bearer_secret_arn=required["INBOUND_BEARER_SECRET_ARN"],
             commercegov_base_url=values.get("COMMERCEGOV_BASE_URL", "").strip(),
             commercegov_read_secret_arn=values.get("COMMERCEGOV_READ_SECRET_ARN", "").strip(),
+            demo_enabled=demo_flag in {"1", "true", "yes"},
+            demo_product_id=demo_product_id,
         )
 
 
@@ -99,6 +108,7 @@ class ObservedSemanticProvider:
         self._provider = provider
         self._context_builder = context_builder
         self.model_id = provider.model_id
+        self.last_semantic_ok: bool | None = None
         self.context_evidence: dict[str, Any] = dict(getattr(context_builder, "last_evidence", {}) or {})
 
     def assess(self, event):
@@ -113,6 +123,7 @@ class ObservedSemanticProvider:
         try:
             result = self._provider.assess(event)
         except Exception as exc:
+            self.last_semantic_ok = False
             self.context_evidence = dict(getattr(self._context_builder, "last_evidence", {}) or {})
             _safe_log(
                 "semantic_assessment_failed",
@@ -123,6 +134,7 @@ class ObservedSemanticProvider:
                 read_status=self.context_evidence.get("read_status"),
             )
             raise
+        self.last_semantic_ok = True
         self.context_evidence = dict(getattr(self._context_builder, "last_evidence", {}) or {})
         _safe_log(
             "semantic_assessment_completed",
@@ -229,6 +241,7 @@ def handle_api_event(
     processor: AuthorityProcessor,
     bearer_authenticator: BearerAuthenticator | None = None,
     operational_processor: AuthorityProcessor | None = None,
+    demo_settings: DemoSettings | None = None,
 ) -> dict[str, Any]:
     started = monotonic()
     request_context = event.get("requestContext")
@@ -237,6 +250,15 @@ def handle_api_event(
     http = request_context.get("http")
     method = http.get("method") if isinstance(http, Mapping) else None
     route_key = event.get("routeKey") or request_context.get("routeKey")
+    if route_key in {"GET /demo", "POST /demo/run"}:
+        selected = operational_processor or processor
+        settings = demo_settings or DemoSettings(
+            enabled=False,
+            agency_id="",
+            shop_id="",
+            product_id="7887756099661",
+        )
+        return handle_demo_request(event, selected, settings)
     if method != "POST":
         return _response(405, {"error": "unsupported_route", "terminal_status": "FAIL_CLOSED"})
     if route_key == "POST /assess":
@@ -306,10 +328,11 @@ def handle_api_event(
 _PROCESSOR: AuthorityProcessor | None = None
 _OPERATIONAL_PROCESSOR: AuthorityProcessor | None = None
 _BEARER_AUTHENTICATOR: SecretsManagerBearerAuthenticator | None = None
+_DEMO_SETTINGS: DemoSettings | None = None
 
 
 def lambda_handler(event: Mapping[str, Any], context: Any) -> dict[str, Any]:
-    global _PROCESSOR, _OPERATIONAL_PROCESSOR, _BEARER_AUTHENTICATOR
+    global _PROCESSOR, _OPERATIONAL_PROCESSOR, _BEARER_AUTHENTICATOR, _DEMO_SETTINGS
     if _PROCESSOR is None or _OPERATIONAL_PROCESSOR is None or _BEARER_AUTHENTICATOR is None:
         config = RuntimeConfig.from_env()
         _PROCESSOR, _OPERATIONAL_PROCESSOR = build_processors(config)
@@ -317,10 +340,17 @@ def lambda_handler(event: Mapping[str, Any], context: Any) -> dict[str, Any]:
             boto3.client("secretsmanager", region_name=config.region_name),
             config.inbound_bearer_secret_arn,
         )
+        _DEMO_SETTINGS = DemoSettings(
+            enabled=config.demo_enabled,
+            agency_id=config.allowed_agency_id,
+            shop_id=config.allowed_shop_id,
+            product_id=config.demo_product_id,
+        )
     return handle_api_event(
         event,
         context,
         _PROCESSOR,
         bearer_authenticator=_BEARER_AUTHENTICATOR,
         operational_processor=_OPERATIONAL_PROCESSOR,
+        demo_settings=_DEMO_SETTINGS,
     )

@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: CommerceGov Authority Agent P2/P3A runtime with optional P3B live read context
+Description: CommerceGov Authority Agent P2–P4B runtime with public judge demo
 
 Parameters:
   EnvironmentName:
@@ -198,6 +198,8 @@ Resources:
           INBOUND_BEARER_SECRET_ARN: !Ref InboundBearerSecret
           COMMERCEGOV_BASE_URL: !Ref CommerceGovBaseUrl
           COMMERCEGOV_READ_SECRET_ARN: !Ref CommerceGovReadSecret
+          DEMO_ENABLED: 'true'
+          DEMO_PRODUCT_ID: '7887756099661'
           LOG_LEVEL: INFO
       Events:
         Assess:
@@ -212,6 +214,24 @@ Resources:
           Properties:
             ApiId: !Ref AuthorityApi
             Path: /events/operational
+            Method: POST
+            PayloadFormatVersion: '2.0'
+            Auth:
+              Authorizer: NONE
+        DemoPage:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AuthorityApi
+            Path: /demo
+            Method: GET
+            PayloadFormatVersion: '2.0'
+            Auth:
+              Authorizer: NONE
+        DemoRun:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AuthorityApi
+            Path: /demo/run
             Method: POST
             PayloadFormatVersion: '2.0'
             Auth:
@@ -246,3 +266,6 @@ Outputs:
     Value: !Ref BedrockModelId
   RuntimeBuildId:
     Value: !Ref RuntimeBuildId
+  DemoEndpoint:
+    Description: Public bounded judge demo
+    Value: !Sub https://${AuthorityApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${EnvironmentName}/demo
