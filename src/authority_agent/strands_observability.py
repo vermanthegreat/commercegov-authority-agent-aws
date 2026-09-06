@@ -19,6 +19,7 @@ from strands.hooks.events import (
 )
 
 LOGGER = logging.getLogger("authority_agent.strands")
+LOGGER.setLevel(logging.INFO)
 _CORRELATION: ContextVar[dict[str, str]] = ContextVar("strands_correlation", default={})
 
 

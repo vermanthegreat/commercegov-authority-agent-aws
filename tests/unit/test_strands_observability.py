@@ -79,3 +79,9 @@ def test_assess_does_not_log_prompt_or_tool_bodies(canonical_payload, caplog) ->
     combined = "\n".join(record.getMessage() for record in caplog.records)
     assert prompt not in combined
     assert "chain-of-thought" not in combined.lower()
+
+
+def test_strands_logger_emits_info() -> None:
+    from authority_agent.strands_observability import LOGGER
+
+    assert LOGGER.level == logging.INFO
