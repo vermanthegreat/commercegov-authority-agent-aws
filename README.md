@@ -1,13 +1,53 @@
 # CommerceGov Authority Agent
 
-Local P0 safety spine plus a bounded P1 Strands semantic layer for the AWS
-Agents for Humans Hackathon 2026.
+AWS Agents for Humans Hackathon 2026: a Strands/Bedrock agent that reasons about
+production-authority risk **without possessing production authority**.
+
+**Capability is not authority.** The model can reason. It cannot grant itself
+authority. CommerceGov, a separate pre-existing governance platform, owns
+approval, Apply, Shopify writeback, and audit. This repository is the AWS agent
+runtime, adapter, deterministic assessment wrapper, evidence store, and demo
+surface — not the CommerceGov kernel.
+
+## Submission snapshot
+
+| Question | Answer |
+|---|---|
+| Problem | Agents can call tools and models, but production mutations still need an authority lifecycle. Capability must not be mistaken for the right to write Shopify. |
+| Why AWS | The agent runtime, Bedrock reasoning, API Gateway ingress, Lambda isolation, and DynamoDB evidence belong on AWS. Production authority does not. |
+| What the agent does | Accepts a tenant-bound CommerceGov operational event, reads bounded CommerceGov context, asks Bedrock for an advisory classification, then applies a deterministic authority floor. |
+| What it cannot do | Approve, Apply, write Shopify, grant production authority, or bypass a human. Authority mode is `PROPOSE_ONLY`. |
+| Where authority lives | CommerceGov: suggestion → review → approve → Apply → worker writeback → verified write → audit. |
+| AWS components | Lambda, HTTP API (API Gateway), DynamoDB, IAM, Secrets Manager, CloudWatch, Amazon Bedrock via Strands 1.54.0 (`global.anthropic.claude-sonnet-4-6`). |
+| Deterministic boundary | Even if Bedrock recommends otherwise, application code returns `AUTHORITY_AT_RISK` / `HUMAN_AUTHORITY_REQUIRED` / `STOP`. Provider errors fail closed to the same floor. |
+| Live demonstration | EVENT#2: exact-scope TITLE drift on `controlled-demo.myshopify.com` assessed as `AUTHORITY_AT_RISK`; CommerceGov opened human Review; no AWS or automatic Shopify write. |
+| Judge demo | Public fixture: [GET /demo](https://40k4yk7gh2.execute-api.us-east-1.amazonaws.com/p2/demo). Spoken walkthrough: `docs/submission/demo-narrative.md`. |
+| Evidence | Frozen EVENT#2: `docs/submission/aws-event-2-evidence.md`. Local matrix: `evidence/p4/P4_EVALUATION.md`. |
+
+Certified anchors:
+
+- AWS runtime SHA `8ce11a1f18984743c8a11f9ad098a03c8448aabc` (build `p4c-8ce11a1`)
+- CommerceGov authority-kernel SHA `5390ea66d5286284fa1fc1f021920530c786bf69` (separate repository)
+
+Architecture (reasoning vs authority vs execution): `docs/submission/architecture.md`.
+Devpost copy: `docs/submission/devpost-copy.md`.
+
+### Planes
+
+| Plane | Owner | Role |
+|---|---|---|
+| Reasoning | this AWS repo | Event adapter, Strands/Bedrock advisory classification, deterministic floor, DynamoDB evidence, demo API |
+| Authority | CommerceGov (separate repo) | Exact-scope decisions, human Review / approve, persisted command identity |
+| Execution | CommerceGov worker (separate repo) | Apply, Shopify writeback, verified write, audit |
+
+AWS does not approve, Apply, or write Shopify. CommerceGov remains the
+authority and execution control plane.
 
 The core invariant is: **capability is not authority**. P0 accepts the audited
 CommerceGov operational-event payload, validates and tenant-binds it, optionally
 invokes a real Strands/Bedrock semantic provider, applies deterministic authority
 controls, and emits the existing CommerceGov response shape. The model remains
-advisory and cannot approve, apply, mutate production, or grant authority.
+advisory and cannot approve, Apply, mutate production, or grant authority.
 
 ## Originality boundary
 
@@ -87,11 +127,11 @@ does not construct an AWS client.
 ## P0/P1 isolation
 
 The default local runner still uses the P0 in-process stub. P1 adds only the
-replaceable semantic adapter and GET-only CommerceGov context client. This
-repository has no AWS deployment, OAuth flow, database, Shopify mutation,
-approval, Apply, or production-write implementation, and stores no credentials.
-Later slices can wire runtime and durable idempotency without weakening
-deterministic control.
+replaceable semantic adapter and GET-only CommerceGov context client. Those
+local slices still contain no Shopify mutation, approval, Apply, or
+production-write implementation, and store no credentials. Hosted P2–P4 slices
+add AWS runtime and durable evidence without weakening deterministic control
+or moving CommerceGov authority into this repository.
 
 ## P2 AWS hosted runtime
 
@@ -166,8 +206,7 @@ P3A is not a new agent. It adds CommerceGov's existing operational ingress
 route to the certified P2 runtime:
 
 ```text
-POST /events/operational
-  Authorization: Bearer <inbound secret>
+POST /events/operational (inbound CommerceGov bearer, validated in Lambda)
   -> same Lambda / P0 kernel / DynamoDB ledger as POST /assess
 ```
 
@@ -182,8 +221,9 @@ adapter. Hosted operational certification:
 python ./scripts/certify_p3a.py --assess-endpoint <stack-output> --operational-endpoint <stack-output> --table <stack-output> --secret-arn <stack-output>
 ```
 
-P3A does not add live CommerceGov read tools, OAuth, Review creation, or a
-Shopify-to-Review claim.
+P3A does not add live CommerceGov read tools, OAuth, Review creation, or an
+AWS-owned Shopify-to-Review claim. EVENT#2 Review (below) was opened by
+CommerceGov after AWS assessment; AWS did not create Review or Apply.
 
 ## P3B live read-only CommerceGov context
 
@@ -224,7 +264,7 @@ match the real producer contract and do not add the artificial top-level field.
 CommerceGov is not modified here; that mismatch requires a separately
 authorized change after this spine is stable. P2 neither fixes nor works around
 it and does not fabricate a top-level `scope_key`. P3A also leaves that
-mismatch unfixed and does not claim a live Shopify-to-Review demonstration.
+mismatch unfixed and does not claim that AWS created Review or Apply.
 P3B also leaves that mismatch unfixed.
 
 ## P4 technical evidence
@@ -256,6 +296,16 @@ Certified public target:
 - product Gift Card `7887756099661`
 - mutation `product.title`
 - demo `https://40k4yk7gh2.execute-api.us-east-1.amazonaws.com/p2/demo`
+
+Live EVENT#2 (frozen, not a rerun): Shopify TITLE on
+`controlled-demo.myshopify.com` changed outside CommerceGov from
+`The Draft Snowboard` to `The Draft Snowboard — External Change`. AWS
+`POST /events/operational` request `DcaINiQzIAMEbhA=` completed
+`AUTHORITY_AT_RISK` / `PROPOSE_ONLY` / `HUMAN_AUTHORITY_REQUIRED` /
+`REVIEW_EXTERNAL_CHANGE`. CommerceGov opened Review cycle
+`external-remediation:2` and remained in `review`. No AWS production write, no
+automatic CommerceGov remediation, no new Apply. Details:
+`docs/submission/aws-event-2-evidence.md`.
 
 CommerceGov is pre-existing infrastructure. This AWS Strands authority agent is
 the hackathon project.
