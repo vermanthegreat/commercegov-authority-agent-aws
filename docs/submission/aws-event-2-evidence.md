@@ -1,5 +1,8 @@
 # Frozen EVENT#2 evidence (public-safe)
 
+Secondary historical operational assessment. **Primary public demo** is
+`judge-demo-v1-20260911-2030` (`docs/submission/evidence-index.md`).
+
 Read-only freeze of the original AWS operational assessment. This is not a
 rerun. No secrets, tokens, or account identifiers.
 

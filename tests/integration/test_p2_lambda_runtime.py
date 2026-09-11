@@ -93,14 +93,14 @@ def test_runtime_configuration_is_explicit_and_model_locked() -> None:
         "ALLOWED_SHOP_ID": "demo-shop.myshopify.com",
         "AWS_REGION": "us-east-1",
         "BEDROCK_MODEL_ID": "global.anthropic.claude-sonnet-4-6",
-        "SEMANTIC_TIMEOUT_SECONDS": "24",
+        "SEMANTIC_TIMEOUT_SECONDS": "26",
         "RUNTIME_BUILD_ID": "candidate",
         "INBOUND_BEARER_SECRET_ARN": "arn:aws:secretsmanager:us-east-1:111122223333:secret:inbound",
     }
-    assert RuntimeConfig.from_env(base).region_name == "us-east-1"
+    assert RuntimeConfig.from_env(base).semantic_timeout_seconds == 26.0
     with pytest.raises(ValueError, match="unapproved_bedrock_model"):
         RuntimeConfig.from_env(base | {"BEDROCK_MODEL_ID": "random-model"})
     with pytest.raises(ValueError, match="missing_runtime_configuration"):
         RuntimeConfig.from_env(base | {"AUTHORITY_TABLE_NAME": ""})
     with pytest.raises(ValueError, match="invalid_semantic_timeout"):
-        RuntimeConfig.from_env(base | {"SEMANTIC_TIMEOUT_SECONDS": "25"})
+        RuntimeConfig.from_env(base | {"SEMANTIC_TIMEOUT_SECONDS": "27"})

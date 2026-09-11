@@ -66,6 +66,7 @@ def test_get_demo_returns_secured_html() -> None:
     assert "https://" not in html
     assert "<script" not in html.lower()
     assert "JUDGE DEMO FIXTURE" in html
+    assert SHOP in html
     assert "Run Authority Assessment" in html
     assert "Approve" not in html
     assert ">Apply<" not in html
@@ -134,6 +135,7 @@ def test_same_bucket_is_cached_and_next_bucket_is_new() -> None:
     assert first["statusCode"] == second["statusCode"] == third["statusCode"] == 200
     assert "judge-demo-v1-20260906-1200" in first["body"]
     assert "CACHED — IDEMPOTENT REPLAY" in second["body"]
+    assert "Already assessed — returning the original authority decision." in second["body"]
     assert "judge-demo-v1-20260906-1205" in third["body"]
     assert provider.calls == 2
 

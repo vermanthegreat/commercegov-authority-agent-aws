@@ -55,6 +55,11 @@ def test_landing_is_html_with_csp_and_run_control() -> None:
     html = render_landing()
     assert "CommerceGov Authority Agent" in html
     assert "AI can reason. Humans retain authority." in html
+    assert "controlled-demo.myshopify.com" in html
+    assert "Gift Card" in html
+    assert DEMO_PRODUCT_ID in html
+    html_from_settings = render_landing(settings())
+    assert SHOP in html_from_settings
     assert "Run Authority Assessment" in html
     assert 'method="post"' in html
     assert 'action="demo/run"' in html

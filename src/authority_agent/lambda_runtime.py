@@ -76,8 +76,8 @@ class RuntimeConfig:
         }
         if any(not value for value in required.values()):
             raise ValueError("missing_runtime_configuration")
-        timeout = float(values.get("SEMANTIC_TIMEOUT_SECONDS", "24"))
-        if not 0 < timeout <= 24:
+        timeout = float(values.get("SEMANTIC_TIMEOUT_SECONDS", "26"))
+        if not 0 < timeout <= 26:
             raise ValueError("invalid_semantic_timeout")
         model_id = values.get("BEDROCK_MODEL_ID", DEFAULT_BEDROCK_MODEL_ID).strip()
         if model_id != DEFAULT_BEDROCK_MODEL_ID:

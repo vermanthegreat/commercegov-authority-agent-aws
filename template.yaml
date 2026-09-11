@@ -9,10 +9,10 @@ Parameters:
     AllowedPattern: '^[a-z0-9-]+$'
   AllowedAgencyId:
     Type: String
-    Default: demo-agency
+    Default: shop_controlled-demo_myshopify_com
   AllowedShopId:
     Type: String
-    Default: demo-shop.myshopify.com
+    Default: controlled-demo.myshopify.com
   BedrockModelId:
     Type: String
     Default: global.anthropic.claude-sonnet-4-6
@@ -193,7 +193,7 @@ Resources:
           ALLOWED_AGENCY_ID: !Ref AllowedAgencyId
           ALLOWED_SHOP_ID: !Ref AllowedShopId
           BEDROCK_MODEL_ID: !Ref BedrockModelId
-          SEMANTIC_TIMEOUT_SECONDS: '24'
+          SEMANTIC_TIMEOUT_SECONDS: '26'
           RUNTIME_BUILD_ID: !Ref RuntimeBuildId
           INBOUND_BEARER_SECRET_ARN: !Ref InboundBearerSecret
           COMMERCEGOV_BASE_URL: !Ref CommerceGovBaseUrl
@@ -209,6 +209,7 @@ Resources:
             Path: /assess
             Method: POST
             PayloadFormatVersion: '2.0'
+            TimeoutInMillis: 30000
         Operational:
           Type: HttpApi
           Properties:
@@ -216,6 +217,7 @@ Resources:
             Path: /events/operational
             Method: POST
             PayloadFormatVersion: '2.0'
+            TimeoutInMillis: 30000
             Auth:
               Authorizer: NONE
         DemoPage:
@@ -225,6 +227,7 @@ Resources:
             Path: /demo
             Method: GET
             PayloadFormatVersion: '2.0'
+            TimeoutInMillis: 30000
             Auth:
               Authorizer: NONE
         DemoRun:
@@ -234,6 +237,7 @@ Resources:
             Path: /demo/run
             Method: POST
             PayloadFormatVersion: '2.0'
+            TimeoutInMillis: 30000
             Auth:
               Authorizer: NONE
       Tags:

@@ -32,6 +32,14 @@ class FakeAgent:
             raise self.error
         return FakeAgentResult(self.output)
 
+    def structured_output(self, output_model, prompt=None):
+        self.calls.append((prompt, {"structured_output_model": output_model}))
+        if self.delay:
+            time.sleep(self.delay)
+        if self.error:
+            raise self.error
+        return FakeAgentResult(self.output)
+
 
 def output(**changes):
     return {

@@ -16,6 +16,7 @@ from authority_agent.orchestration import AuthorityProcessor
 DEMO_PRODUCT_ID = "7887756099661"
 DEMO_MUTATION = "product.title"
 DEMO_PRODUCT_TITLE = "Gift Card"
+CERTIFIED_DEMO_SHOP = "controlled-demo.myshopify.com"
 DEMO_EVENT_PREFIX = "judge-demo-v1"
 BUCKET_MINUTES = 5
 HTML_CONTENT_TYPE = "text/html; charset=utf-8"
@@ -117,10 +118,12 @@ def _page(title: str, inner: str) -> str:
     )
 
 
-def render_landing() -> str:
+def render_landing(settings: DemoSettings | None = None) -> str:
+    shop = settings.shop_id if settings is not None else CERTIFIED_DEMO_SHOP
     inner = (
         "<h1>CommerceGov Authority Agent</h1>"
         "<p class=\"lede\">AI can reason. Humans retain authority.</p>"
+        "<p class=\"note\">AI remains probabilistic. Authority does not.</p>"
         "<div class=\"story\">"
         "<div>1. An operational commerce event exists.</div>"
         "<div>2. The agent <b>reads</b> live governed product and policy context.</div>"
@@ -131,7 +134,7 @@ def render_landing() -> str:
         "</div>"
         "<section><h2>Operational Event</h2><dl>"
         "<dt>Source</dt><dd>JUDGE DEMO FIXTURE</dd>"
-        "<dt>Shop</dt><dd>controlled-demo.myshopify.com</dd>"
+        f"<dt>Shop</dt><dd>{escape(shop)}</dd>"
         f"<dt>Product</dt><dd>{escape(DEMO_PRODUCT_TITLE)}</dd>"
         f"<dt>Product ID</dt><dd>{escape(DEMO_PRODUCT_ID)}</dd>"
         f"<dt>Mutation</dt><dd>{escape(DEMO_MUTATION)}</dd>"
@@ -188,25 +191,39 @@ def render_result(
     execution_label = "CACHED — IDEMPOTENT REPLAY" if cached else "LIVE ASSESSMENT"
     live_source = str(live.get("source") or "")
     live_source_label = "LIVE COMMERCEGOV" if live_source == "live_commercegov" else (live_source or "not recorded on this replay")
-    product_read = "PASS" if live.get("product_read") in {"ok", "success"} or live.get("product_context_hash") else (str(live.get("product_read") or "not recorded on this replay"))
-    policy_read = "PASS" if live.get("policy_read") in {"ok", "success"} or live.get("policy_hash") else (str(live.get("policy_read") or "not recorded on this replay"))
-    semantic_status = "PROVIDER ERROR" if unavailable else ("PASS" if semantic.get("status") == "valid" or not unavailable else "UNKNOWN")
+    def _read_label(value: Any, hashed: Any) -> str:
+        if value in {"ok", "success"} or hashed:
+            return "SUCCEEDED"
+        return str(value or "not recorded on this replay")
+
+    product_read = _read_label(live.get("product_read"), live.get("product_context_hash"))
+    policy_read = _read_label(live.get("policy_read"), live.get("policy_hash"))
     if unavailable:
         semantic_status = "PROVIDER ERROR"
     elif semantic.get("status") == "valid":
-        semantic_status = "PASS"
-    elif cached and not unavailable:
-        semantic_status = str(semantic.get("status") or "PASS")
-        if semantic_status == "valid":
-            semantic_status = "PASS"
+        semantic_status = "COMPLETED"
+    elif cached:
+        raw_status = str(semantic.get("status") or "COMPLETED")
+        semantic_status = "COMPLETED" if raw_status in {"valid", "COMPLETED", "PASS"} else raw_status
+    else:
+        semantic_status = "UNKNOWN"
     summary = bound_semantic_summary(semantic.get("summary")) or ("unavailable" if unavailable else "")
     semantic_class = str(semantic.get("classification") or ("unavailable" if unavailable else "not recorded"))
     fail_copy = (
         "<p class=\"note\">The semantic provider did not complete successfully. "
         "The authority boundary therefore prevented autonomous continuation.</p>"
         if unavailable
+        else "<p class=\"note\">Strands / Bedrock produced advisory intelligence. Deterministic authority decides what may happen next.</p>"
+    )
+    cache_copy = (
+        "<p class=\"note\">Already assessed — returning the original authority decision. "
+        "The same operational event cannot trigger duplicate processing.</p>"
+        if cached
         else ""
     )
+    authority_mode = str(
+        (extra or {}).get("authority_mode") if isinstance(extra, Mapping) else ""
+    ) or "PROPOSE_ONLY"
     evidence_id = (view.get("evidence") or {}).get("evidence_id")
     evidence_row = (
         f"<dt>Evidence ID</dt><dd>{escape(str(evidence_id))}</dd>" if evidence_id else ""
@@ -214,6 +231,8 @@ def render_result(
     inner = (
         "<h1>CommerceGov Authority Agent</h1>"
         "<p class=\"lede\">AI can reason. Humans retain authority.</p>"
+        "<p class=\"note\">AI remains probabilistic. Authority does not.</p>"
+        f"{cache_copy}"
         "<div class=\"story\">"
         "<div>Semantic assessment is advisory.</div>"
         "<div>Deterministic authority decides whether processing may continue.</div>"
@@ -247,6 +266,7 @@ def render_result(
         "</section>"
         "<section><h2>Deterministic Authority</h2><dl>"
         "<dt>Role</dt><dd>FINAL AUTHORITY DECISION</dd>"
+        f"<dt>Authority mode</dt><dd>{escape(authority_mode)}</dd>"
         f"<dt>Classification</dt><dd class=\"risk\">{escape(str(authority.get('classification') or ''))}</dd>"
         "<dt>Human authority</dt><dd class=\"risk\">REQUIRED</dd>"
         "<dt>Autonomous processing</dt><dd class=\"stop\">STOPPED</dd>"
@@ -340,7 +360,7 @@ def handle_demo_request(
     http = request_context.get("http") if isinstance(request_context, Mapping) else {}
     method = str(http.get("method") or "") if isinstance(http, Mapping) else ""
     if route_key == "GET /demo" or (method == "GET" and str(event.get("rawPath") or "").rstrip("/").endswith("/demo")):
-        page = render_landing()
+        page = render_landing(settings)
         return _html_response(200, page)
     if route_key != "POST /demo/run" and not (method == "POST" and str(event.get("rawPath") or "").endswith("/demo/run")):
         return _html_response(405, render_error("Unsupported demo route."))

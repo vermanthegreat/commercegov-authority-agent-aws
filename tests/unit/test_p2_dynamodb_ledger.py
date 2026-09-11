@@ -5,10 +5,10 @@ from copy import deepcopy
 from botocore.exceptions import ClientError
 import pytest
 
-from authority_agent.contracts import ConflictingDuplicateError, EventInProgressError
+from authority_agent.contracts import ConflictingDuplicateError, EventIdentityConflictError, EventInProgressError
 from authority_agent.dynamodb_ledger import DynamoDbIdempotencyLedger, event_sort_key, tenant_partition_key
 from authority_agent.normalization import normalize_commercegov_event
-from authority_agent.orchestration import AuthorityProcessor, TenantBindingRegistry
+from authority_agent.orchestration import AuthorityProcessor, TenantBindingRegistry, canonical_request_hash
 
 
 class FakeTable:
@@ -188,3 +188,25 @@ def test_semantic_failure_is_completed_with_explicit_error_evidence(canonical_pa
     assert item["evidence"]["semantic_status"] == "provider_error"
     assert item["evidence"]["error_category"] == "semantic_provider_error"
     assert item["evidence"]["terminal_status"] == "HUMAN_AUTHORITY_REQUIRED"
+
+
+def test_stale_complete_cannot_overwrite_completed_evidence(canonical_payload) -> None:
+    table = FakeTable()
+    provider = FailingProvider()
+    processor, ledger = make_durable_processor(table, provider)
+    first = processor.process(canonical_payload)
+    event = normalize_commercegov_event(canonical_payload)
+    item_before = deepcopy(table.items[(tenant_partition_key(event), event_sort_key(event))])
+    with pytest.raises(EventIdentityConflictError, match="idempotency_completion_conflict"):
+        ledger.complete(
+            event,
+            canonical_request_hash(event),
+            {"status": "SHOULD_NOT_WRITE"},
+            {"semantic_status": "valid", "semantic_summary": "late worker"},
+        )
+    item_after = table.items[(tenant_partition_key(event), event_sort_key(event))]
+    assert item_after == item_before
+    assert first.body["intelligence_classification"] == "AUTHORITY_AT_RISK"
+    assert item_after["evidence"]["semantic_status"] == "provider_error"
+    assert item_after["response"]["status"] == first.body["status"]
+

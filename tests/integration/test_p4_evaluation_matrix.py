@@ -386,6 +386,7 @@ def test_26_same_demo_bucket_does_not_call_bedrock_twice() -> None:
     second = invoke_demo(demo_run(), processor, settings)
     assert first["statusCode"] == second["statusCode"] == 200
     assert "CACHED — IDEMPOTENT REPLAY" in second["body"]
+    assert "Already assessed — returning the original authority decision." in second["body"]
     assert provider.calls == 1
     clock["now"] = clock["now"] + timedelta(minutes=5)
     third = invoke_demo(demo_run(), processor, settings)

@@ -7,6 +7,9 @@ from time import monotonic
 from typing import Any
 import json
 import logging
+import re
+
+from pydantic import ValidationError
 
 from strands.hooks import HookProvider, HookRegistry
 from strands.hooks.events import (
@@ -33,6 +36,99 @@ def bind_semantic_correlation(**fields: str) -> Any:
 
 def reset_semantic_correlation(token: Any) -> None:
     _CORRELATION.reset(token)
+
+
+def _truncate_failure_message(message: object) -> str:
+    text = str(message)
+    text = re.sub(r"input_value=.*?(?=\s*input_type=)", "input_value=<redacted> ", text, flags=re.S)
+    text = re.sub(r"input_value=('[^']*'|\"[^\"]*\")", "input_value=<redacted>", text)
+    if text.count("{") + text.count("}") > 80:
+        stripped = text.split("{", 1)[0].strip()
+        text = stripped or "structured_output_failure"
+    if len(text) > 300:
+        return text[:300]
+    return text
+
+
+def _extract_stop_reason(exc: BaseException, explicit: str | None = None) -> str | None:
+    if explicit:
+        return explicit
+    candidates = [exc, getattr(exc, "__cause__", None), getattr(exc, "__context__", None)]
+    pattern = re.compile(r"stop_reason:\s*([A-Za-z_]+)")
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        match = pattern.search(str(candidate))
+        if match:
+            return match.group(1)
+        for arg in getattr(candidate, "args", ()):
+            if isinstance(arg, str):
+                match = pattern.search(arg)
+                if match:
+                    return match.group(1)
+    return None
+
+
+def _content_block_types(content: list[Any] | None) -> list[str]:
+    if not content:
+        return []
+    block_types: list[str] = []
+    for block in content:
+        if not isinstance(block, dict):
+            continue
+        if "toolUse" in block:
+            block_types.append("toolUse")
+        elif "text" in block:
+            block_types.append("text")
+        elif "toolResult" in block:
+            block_types.append("toolResult")
+        elif "reasoningContent" in block:
+            block_types.append("reasoningContent")
+        elif "citationsContent" in block:
+            block_types.append("citationsContent")
+        else:
+            block_types.append("unknown")
+    return block_types
+
+
+def _log_structured_output_failure(
+    exc: BaseException,
+    *,
+    content: list[Any] | None = None,
+    stop_reason: str | None = None,
+    schema_validation_reached: bool = False,
+    schema_error: ValidationError | None = None,
+) -> None:
+    block_types = _content_block_types(content)
+    payload: dict[str, Any] = {
+        "message": "strands_lifecycle",
+        "stage": "structured_output_failed",
+        "success": False,
+        **_CORRELATION.get(),
+        "exception_class": exc.__class__.__name__,
+        "exception_message": _truncate_failure_message(exc),
+        "stop_reason": _extract_stop_reason(exc, stop_reason),
+        "content_block_types": block_types,
+        "tool_use_present": "toolUse" in block_types,
+        "text_present": "text" in block_types,
+        "schema_validation_reached": schema_validation_reached,
+    }
+    cause = exc.__cause__
+    if cause is not None:
+        payload["cause_class"] = cause.__class__.__name__
+        payload["cause_message"] = _truncate_failure_message(cause)
+    context = exc.__context__
+    if context is not None and context is not cause:
+        payload["context_class"] = context.__class__.__name__
+        payload["context_message"] = _truncate_failure_message(context)
+    if schema_error is not None:
+        payload["schema_error_class"] = schema_error.__class__.__name__
+        payload["schema_error_path"] = [
+            ".".join(str(part) for part in item.get("loc", ()))
+            for item in schema_error.errors()
+            if item.get("loc")
+        ]
+    LOGGER.info(json.dumps(payload, sort_keys=True, default=str))
 
 
 def _safe_log(stage: str, *, success: bool | None = None, duration_ms: int | None = None, **fields: Any) -> None:

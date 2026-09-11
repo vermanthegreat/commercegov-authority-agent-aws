@@ -25,7 +25,12 @@ if ($LASTEXITCODE -ne 0) { throw "SAM validation failed" }
     --capabilities CAPABILITY_NAMED_IAM `
     --no-confirm-changeset `
     --no-fail-on-empty-changeset `
-    --parameter-overrides "RuntimeBuildId=$BuildId"
+    --parameter-overrides `
+        "RuntimeBuildId=$BuildId" `
+        "AllowedAgencyId=shop_controlled-demo_myshopify_com" `
+        "AllowedShopId=controlled-demo.myshopify.com" `
+        "BedrockModelId=global.anthropic.claude-sonnet-4-6" `
+        "CommerceGovBaseUrl=https://app.commercegov.io"
 if ($LASTEXITCODE -ne 0) { throw "SAM deployment failed" }
 
 aws cloudformation describe-stacks --stack-name $StackName --region $Region `

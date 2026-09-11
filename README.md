@@ -20,13 +20,13 @@ surface — not the CommerceGov kernel.
 | Where authority lives | CommerceGov: suggestion → review → approve → Apply → worker writeback → verified write → audit. |
 | AWS components | Lambda, HTTP API (API Gateway), DynamoDB, IAM, Secrets Manager, CloudWatch, Amazon Bedrock via Strands 1.54.0 (`global.anthropic.claude-sonnet-4-6`). |
 | Deterministic boundary | Even if Bedrock recommends otherwise, application code returns `AUTHORITY_AT_RISK` / `HUMAN_AUTHORITY_REQUIRED` / `STOP`. Provider errors fail closed to the same floor. |
-| Live demonstration | EVENT#2: exact-scope TITLE drift on `controlled-demo.myshopify.com` assessed as `AUTHORITY_AT_RISK`; CommerceGov opened human Review; no AWS or automatic Shopify write. |
+| Live demonstration | Public demo `judge-demo-v1-20260911-2030` (build `p4c-so-clip-summary`): Bedrock `NO_ACTION_REQUIRED`, deterministic `AUTHORITY_AT_RISK` / `STOP`. Historical EVENT#2 remains secondary operational evidence. |
 | Judge demo | Public fixture: [GET /demo](https://40k4yk7gh2.execute-api.us-east-1.amazonaws.com/p2/demo). Spoken walkthrough: `docs/submission/demo-narrative.md`. |
-| Evidence | Frozen EVENT#2: `docs/submission/aws-event-2-evidence.md`. Local matrix: `evidence/p4/P4_EVALUATION.md`. |
+| Evidence | Freeze: `docs/submission/freeze-manifest.md`. Index: `docs/submission/evidence-index.md`. Historical EVENT#2: `docs/submission/aws-event-2-evidence.md`. |
 
 Certified anchors:
 
-- AWS runtime SHA `8ce11a1f18984743c8a11f9ad098a03c8448aabc` (build `p4c-8ce11a1`)
+- Live AWS build `p4c-so-clip-summary` (Lambda `$LATEST`; git HEAD `6318d7c` is dirty vs this build)
 - CommerceGov authority-kernel SHA `5390ea66d5286284fa1fc1f021920530c786bf69` (separate repository)
 
 Architecture (reasoning vs authority vs execution): `docs/submission/architecture.md`.
