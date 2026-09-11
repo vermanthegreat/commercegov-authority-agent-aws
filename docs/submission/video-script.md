@@ -18,9 +18,9 @@ On the public demo, product read succeeded. Policy read succeeded. Semantic
 status is completed.
 
 Bedrock classifies this event as NO_ACTION_REQUIRED.
-But that recommendation is advisory.
-The deterministic authority layer classifies the event as AUTHORITY_AT_RISK,
-requires human authority, and stops autonomous processing.
+But that result is advisory.
+The deterministic authority layer still classifies the event as
+AUTHORITY_AT_RISK, requires human authority, and stops autonomous processing.
 
 The model can recommend. It cannot authorize production.
 

@@ -5,6 +5,28 @@ production-authority risk **without possessing production authority**.
 
 **AI remains probabilistic. Authority does not.**
 
+The agent performs probabilistic authority-risk assessment.
+Production authority remains outside the model.
+
+## For judges (3 minutes)
+
+1. **What:** AWS Lambda agent (Strands + Amazon Bedrock) that triages commerce authority risk.
+2. **Why:** Operators cannot scale-review every production change from humans, apps, and agents.
+3. **Autonomous:** receive event, read-only product/policy context, one Bedrock assessment, persist evidence, stop.
+4. **Cannot:** Approve, Apply, write Shopify, create CommerceGov proposals, or grant itself authority.
+5. **Architecture:** event → API Gateway → Lambda → Strands/Bedrock ← read-only context/policy → deterministic `PROPOSE_ONLY` / `HUMAN_AUTHORITY_REQUIRED` / `STOP` → human remediation. See `docs/submission/architecture.md`.
+6. **Strands:** `Agent` + tools in `strands_provider.py` / `semantic_context.py`.
+7. **Bedrock:** `BedrockModel` `global.anthropic.claude-sonnet-4-6`, one structured call per new event.
+8. **Tools:** `get_governance_context`, `get_effective_policy` only.
+9. **Authority:** `enforce_authority_boundary` always floors this class to `AUTHORITY_AT_RISK` / STOP even if the model says `NO_ACTION_REQUIRED`.
+10. **Demo:** https://40k4yk7gh2.execute-api.us-east-1.amazonaws.com/p2/demo — click Run **once**, wait, then replay the same event. Proven: `judge-demo-v1-20260911-2030`.
+11. **Evidence:** DynamoDB EVENT# item; replay is idempotent (`docs/submission/evidence-index.md`).
+12. **Local:** Python ≥3.11, `pip install -e ".[test]"`, `pytest -q`.
+13. **AWS:** SAM/CloudFormation stack `commercegov-authority-agent-aws-p2`, region `us-east-1`, Lambda python3.13.
+14. **Disclosure:** CommerceGov control plane pre-existed; this AWS agent/runtime/demo is hackathon-built.
+15. **License:** MIT (`LICENSE`).
+16. **Video:** script `docs/submission/video-script.md`. Public URL: _not recorded yet_.
+
 **Capability is not authority.** The model can reason. It cannot grant itself
 authority. CommerceGov, a separate pre-existing governance platform, owns
 approval, Apply, Shopify writeback, and audit. This repository is the AWS agent
@@ -36,6 +58,10 @@ Architecture: `docs/submission/architecture.md`.
 Devpost copy: `docs/submission/devpost-copy.md`.  
 Video script: `docs/submission/video-script.md`.  
 Video (when recorded): _add public URL here_.
+
+## License
+
+MIT. See `LICENSE`. Copyright (c) 2026 vermanthegreat (repository git identity).
 
 ### Planes
 

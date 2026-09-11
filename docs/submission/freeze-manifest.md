@@ -9,6 +9,7 @@ Read-only freeze. No secrets. The source commit was **not** redeployed.
 | **SOURCE FREEZE COMMIT** | `18107a9bf7af50702ee31b91f35eee188eb0e55e` |
 | Parent | `6318d7c0bd8dc75b5e007f21a0dd1a4222b031bc` |
 | Tree | `0807e60b6df3d2692d4b74fdc0a88d5ac0f5007a` |
+| Follow-on documentation commit | `f3254886875c779244f34feaaf01d05a1bd7dfae` |
 | **CURRENT DEPLOYED LAMBDA** | `$LATEST` build `p4c-so-clip-summary` |
 | Lambda CodeSha256 | `F5H5hEB1x/qw8fCFN/wfSe+hku6McyhhdDSYkBVo62I=` |
 

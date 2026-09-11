@@ -10,21 +10,27 @@ AI remains probabilistic. Authority does not.
 
 ## SHORT DESCRIPTION
 
-A Strands + Amazon Bedrock agent on AWS Lambda autonomously triages commerce
-authority risk from live read-only CommerceGov context. A separate
-deterministic layer always returns `PROPOSE_ONLY` / `HUMAN_AUTHORITY_REQUIRED`
-/ `STOP`. The model can recommend. It cannot authorize production.
+CommerceGov Authority Agent is a Strands-powered AWS agent that autonomously
+triages authority risk in commerce operations using Amazon Bedrock and
+read-only governance context.
+
+The AI assesses. Deterministic controls decide what is allowed. Humans retain
+production authority. A separate layer always returns `PROPOSE_ONLY` /
+`HUMAN_AUTHORITY_REQUIRED` / `STOP`. The model can recommend. It cannot
+authorize production.
 
 ## PROBLEM
 
-AI agents are probabilistic. Production catalog authority cannot be. Being able
-to call Bedrock is not a grant to mutate Shopify.
+Operators cannot scale-review every production change from humans, apps,
+automations, and AI agents. The AWS agent gathers bounded context and performs
+judgment-heavy authority triage, then surfaces a human decision. It does not
+eliminate human review.
 
 ## SOLUTION
 
 Keep judgment in the model and permission in deterministic application code.
 The AWS agent reads, assesses, explains, and stops. Humans remediate in
-CommerceGov.
+CommerceGov. Being able to call Bedrock is not a grant to mutate Shopify.
 
 ## HOW IT WORKS
 

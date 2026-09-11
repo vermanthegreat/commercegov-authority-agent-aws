@@ -7,6 +7,9 @@ Primary demo is the successful COMPLETED Bedrock run. Failure paths are secondar
 | Field | Value |
 |---|---|
 | Build ID | `p4c-so-clip-summary` |
+| Lambda CodeSha256 | `F5H5hEB1x/qw8fCFN/wfSe+hku6McyhhdDSYkBVo62I=` |
+| Source freeze commit | `18107a9bf7af50702ee31b91f35eee188eb0e55e` |
+| Documentation commit | `f3254886875c779244f34feaaf01d05a1bd7dfae` |
 | Event ID | `judge-demo-v1-20260911-2030` |
 | API Gateway request ID | `DjSz8hQwIAMESrw=` |
 | Lambda request ID | `c1328944-d47e-4854-b62c-22a39e84f156` |
