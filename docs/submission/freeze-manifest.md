@@ -1,29 +1,29 @@
 # AWS submission freeze (p4c-so-clip-summary)
 
-Read-only freeze of the proven hosted hackathon runtime. No secrets.
+Read-only freeze. No secrets. The source commit was **not** redeployed.
 
-This freeze records **what is live**, not git cleanliness. Workspace `main`
-HEAD is behind the deployed build: proven Lambda code is uncommitted relative
-to `6318d7c`.
+## Distinguish source vs live Lambda
 
-## Identifiers
+| Plane | Identifier |
+|---|---|
+| **SOURCE FREEZE COMMIT** | `18107a9bf7af50702ee31b91f35eee188eb0e55e` |
+| Parent | `6318d7c0bd8dc75b5e007f21a0dd1a4222b031bc` |
+| Tree | `0807e60b6df3d2692d4b74fdc0a88d5ac0f5007a` |
+| **CURRENT DEPLOYED LAMBDA** | `$LATEST` build `p4c-so-clip-summary` |
+| Lambda CodeSha256 | `F5H5hEB1x/qw8fCFN/wfSe+hku6McyhhdDSYkBVo62I=` |
+
+The freeze commit records the working tree that was packaged into
+`.build/lambda` and deployed as `p4c-so-clip-summary`. Every
+`src/authority_agent/*.py` file SHA-256-matched that package at freeze time.
+This commit does **not** create a new Lambda version.
+
+## Deployed runtime
 
 | Item | Value |
 |---|---|
-| Git HEAD (committed) | `6318d7c0bd8dc75b5e007f21a0dd1a4222b031bc` |
-| Git branch | `main` |
-| Working tree | **DIRTY** (runtime + tests that match the live build; not in HEAD) |
-| Deployed build ID | `p4c-so-clip-summary` |
-| CloudFormation stack | `commercegov-authority-agent-aws-p2` |
-| Stack status | `UPDATE_COMPLETE` (2026-09-11T20:27:11Z) |
+| CloudFormation stack | `commercegov-authority-agent-aws-p2` (`UPDATE_COMPLETE`) |
 | Region | `us-east-1` |
-| Lambda | `commercegov-authority-agent-p2` |
-| Lambda version | `$LATEST` |
-| Lambda runtime | `python3.13` |
-| Lambda timeout | 29s |
-| Lambda memory | 1024 MB |
-| Lambda last modified | 2026-09-11T20:27:23Z |
-| Lambda CodeSha256 | `F5H5hEB1x/qw8fCFN/wfSe+hku6McyhhdDSYkBVo62I=` |
+| Lambda | `commercegov-authority-agent-p2` `$LATEST` python3.13 timeout 29s / 1024 MB |
 | Semantic timeout | 26s |
 | HTTP API | `40k4yk7gh2` stage `p2` |
 | Demo URL | https://40k4yk7gh2.execute-api.us-east-1.amazonaws.com/p2/demo |
@@ -33,8 +33,8 @@ to `6318d7c`.
 | CommerceGov origin | `https://app.commercegov.io` |
 | Shop | `controlled-demo.myshopify.com` |
 | Agency | `shop_controlled-demo_myshopify_com` |
-| Demo product | `7887756099661` (Gift Card) |
-| OAuth scopes (unchanged) | `shops:read products:read policy:read` |
+| Demo product | `7887756099661` |
+| Focused tests | 75 passed (structured-output, Strands, observability, Lambda, ledger, demo, IAM, evaluation matrix) |
 
 ## Primary proven live run
 
@@ -45,18 +45,6 @@ to `6318d7c`.
 | Lambda request ID | `c1328944-d47e-4854-b62c-22a39e84f156` |
 | Execution ID | `2cc43b64-7396-426d-9595-ed2c97ed8ea9` |
 | Evidence ID | `evidence:2cc43b64-7396-426d-9595-ed2c97ed8ea9` |
-| Lambda duration | 8686 ms (init 2105 ms) |
-| Model duration | 5765 ms |
-| Semantic status | `COMPLETED` / `valid` |
-| Provider fallback | **NO** |
-
-## Replay
-
-| Item | Value |
-|---|---|
-| API Gateway request ID | `DjS8-hzYIAMESwA=` |
-| Lambda request ID | `9467fe75-7d5c-4eb6-bb50-1e00ac131a5a` |
-| Result | `CACHED — IDEMPOTENT REPLAY` |
-| Duration | 14 ms |
-| Second `semantic_assessment_started` | **NO** |
-| Evidence reused | `evidence:2cc43b64-7396-426d-9595-ed2c97ed8ea9` |
+| Semantic status | COMPLETED |
+| Provider fallback | NO |
+| Replay | `DjS8-hzYIAMESwA=` / no second Bedrock call |

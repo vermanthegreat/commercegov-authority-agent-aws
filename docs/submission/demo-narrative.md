@@ -1,5 +1,8 @@
 # Judge demo script (~90–150 seconds)
 
+Canonical ~115s recording script: `docs/submission/video-script.md`.  
+Shot list: `docs/submission/video-shot-list.md`.
+
 Public fixture (do not click Run twice while a request is in flight):
 https://40k4yk7gh2.execute-api.us-east-1.amazonaws.com/p2/demo
 

@@ -3,6 +3,8 @@
 AWS Agents for Humans Hackathon 2026: a Strands/Bedrock agent that reasons about
 production-authority risk **without possessing production authority**.
 
+**AI remains probabilistic. Authority does not.**
+
 **Capability is not authority.** The model can reason. It cannot grant itself
 authority. CommerceGov, a separate pre-existing governance platform, owns
 approval, Apply, Shopify writeback, and audit. This repository is the AWS agent
@@ -26,11 +28,14 @@ surface — not the CommerceGov kernel.
 
 Certified anchors:
 
-- Live AWS build `p4c-so-clip-summary` (Lambda `$LATEST`; git HEAD `6318d7c` is dirty vs this build)
+- Source freeze commit `18107a9bf7af50702ee31b91f35eee188eb0e55e` (not redeployed)
+- Deployed Lambda `$LATEST` build `p4c-so-clip-summary` (CodeSha256 `F5H5hEB1x/qw8fCFN/wfSe+hku6McyhhdDSYkBVo62I=`)
 - CommerceGov authority-kernel SHA `5390ea66d5286284fa1fc1f021920530c786bf69` (separate repository)
 
-Architecture (reasoning vs authority vs execution): `docs/submission/architecture.md`.
-Devpost copy: `docs/submission/devpost-copy.md`.
+Architecture: `docs/submission/architecture.md`.  
+Devpost copy: `docs/submission/devpost-copy.md`.  
+Video script: `docs/submission/video-script.md`.  
+Video (when recorded): _add public URL here_.
 
 ### Planes
 
