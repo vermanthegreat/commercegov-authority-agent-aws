@@ -11,13 +11,22 @@ from authority_agent.prompt_presets import (
 )
 from authority_agent.prompt_runtime import AGENT_AUTHORITY
 from authority_agent.scenario_identity import (
+    AUTHORITY_PRODUCT_ID,
     CANONICAL_AGENCY,
     CANONICAL_SHOP,
     TITLE_MAX_LENGTH,
+    pinned_product_id,
 )
 from conftest import make_processor
 from tests.unit.test_prompt_demo_surface import get_event
 from authority_agent.demo_surface import DemoSettings
+
+
+def test_allowed_proposal_resolves_aws_judge_authority_product() -> None:
+    assert CANONICAL_SHOP == "commercegov-aws-judge.myshopify.com"
+    assert AUTHORITY_PRODUCT_ID == "9253164613795"
+    assert pinned_product_id("AWS Authority Demo Snowboard") == "9253164613795"
+    assert "7972360355917" != AUTHORITY_PRODUCT_ID
 
 
 def test_all_presets_share_canonical_shop_and_review_link() -> None:
@@ -34,7 +43,8 @@ def test_all_presets_share_canonical_shop_and_review_link() -> None:
         f"?shop={CANONICAL_SHOP}&shop_id={CANONICAL_SHOP}&tab=review&stage=review"
     )
     assert f"shop={CANONICAL_SHOP}" in html
-    assert "commercegov-aws-judge.myshopify.com" not in html
+    assert CANONICAL_SHOP == "commercegov-aws-judge.myshopify.com"
+    assert "controlled-demo.myshopify.com" not in html
     for name in PRESET_ORDER:
         assert name in PRESETS
     assert SCENARIO_FIXTURES["ALLOWED_PROPOSAL"].target_title
@@ -50,7 +60,7 @@ def test_agent_page_does_not_follow_demo_settings_shop_fallback() -> None:
     settings = DemoSettings(
         enabled=True,
         agency_id=CANONICAL_AGENCY,
-        shop_id="commercegov-aws-judge.myshopify.com",
+        shop_id="controlled-demo.myshopify.com",
         product_id="7887756099661",
     )
     result = handle_api_event(
@@ -61,4 +71,4 @@ def test_agent_page_does_not_follow_demo_settings_shop_fallback() -> None:
     )
     body = result["body"]
     assert CANONICAL_SHOP in body
-    assert "commercegov-aws-judge.myshopify.com" not in body
+    assert "controlled-demo.myshopify.com" not in body

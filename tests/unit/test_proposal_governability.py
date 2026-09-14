@@ -29,10 +29,10 @@ from tests.unit.test_prompt_demo_surface import (
     run_event,
 )
 
-from authority_agent.scenario_identity import AUTHORITY_PRODUCT_ID
+from authority_agent.scenario_identity import AUTHORITY_PRODUCT_ID, CANONICAL_AGENCY, CANONICAL_SHOP
 
-SHOP = "controlled-demo.myshopify.com"
-AGENCY = "shop_controlled-demo_myshopify_com"
+SHOP = CANONICAL_SHOP
+AGENCY = CANONICAL_AGENCY
 APPROVED = ProductRef("7887756656717", "The Complete Snowboard", "approved")
 ACTIVE = ProductRef(AUTHORITY_PRODUCT_ID, "AWS Authority Demo Snowboard", "active")
 
@@ -171,14 +171,15 @@ def test_active_exact_match_posts_for_commercegov_admission() -> None:
     _posted, terminal, _store, _invoker = finish_prompt(run_event("propose active"), runtime)
     body = json.loads(terminal["body"])
     assert transport.calls
-    assert "7972360355917" in transport.calls[0]["path"]
+    assert AUTHORITY_PRODUCT_ID in transport.calls[0]["path"]
+    assert AUTHORITY_PRODUCT_ID == "9253164613795"
     assert transport.calls[0]["payload"]["changes"] == {
         "title": "AWS Authority Demo Snowboard — Governed"
     }
     assert body["state"] == "SUCCESS"
     assert body["evidence"]["proposal_id"] == "prop-1"
     assert body["evidence"]["target_product"] == (
-        "AWS Authority Demo Snowboard (7972360355917)"
+        f"AWS Authority Demo Snowboard ({AUTHORITY_PRODUCT_ID})"
     )
 
 
@@ -216,7 +217,7 @@ def test_exact_title_resolves_one_runtime_product_id() -> None:
     body = json.loads(terminal["body"])
     assert body["state"] == "SUCCESS"
     assert body["evidence"]["target_product"] == (
-        "AWS Authority Demo Snowboard (7972360355917)"
+        f"AWS Authority Demo Snowboard ({AUTHORITY_PRODUCT_ID})"
     )
     assert transport.calls
 
@@ -265,7 +266,7 @@ def test_duplicate_exact_titles_resolve_pinned_scenario_product() -> None:
 def test_find_product_rejects_non_canonical_shop() -> None:
     host = _adapter([ACTIVE], RecordingProposalTransport(result=_pass_body(ACTIVE)))
     with pytest.raises(CommerceGovReadError) as exc:
-        host.find_product("commercegov-aws-judge.myshopify.com", "AWS Authority Demo Snowboard")
+        host.find_product("controlled-demo.myshopify.com", "AWS Authority Demo Snowboard")
     assert str(exc.value) == "scenario_shop_mismatch"
 
 
