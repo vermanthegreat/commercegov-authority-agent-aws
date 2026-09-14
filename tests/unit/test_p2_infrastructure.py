@@ -11,7 +11,7 @@ def test_sam_template_defines_only_minimal_authenticated_runtime() -> None:
     assert "AWS::Serverless::Function" in template
     assert "AWS::DynamoDB::Table" in template
     assert "AWS::Logs::LogGroup" in template
-    assert "Timeout: 29" in template
+    assert "Timeout: 90" in template
     assert "SEMANTIC_TIMEOUT_SECONDS: '26'" in template
     assert "TimeoutInMillis: 30000" in template
     assert "Action: '*'" not in template
@@ -23,8 +23,8 @@ def test_sam_template_defines_only_minimal_authenticated_runtime() -> None:
     assert "Path: /demo" in template
     assert "Path: /demo/run" in template
     assert "DEMO_PRODUCT_ID: '7887756099661'" in template
-    assert "Default: shop_controlled-demo_myshopify_com" in template
-    assert "Default: controlled-demo.myshopify.com" in template
+    assert "Default: shop_commercegov-aws-judge_myshopify_com" in template
+    assert "Default: commercegov-aws-judge.myshopify.com" in template
     assert "Authorizer: NONE" in template
     assert "Path: /assess" in template
     assert "DefaultAuthorizer: AWS_IAM" in template
@@ -45,7 +45,7 @@ def test_lambda_build_is_linux_x86_64_and_pinned() -> None:
     assert "pydantic==2.13.4" in requirements
     deploy_script = (ROOT / "scripts" / "deploy_p2.ps1").read_text(encoding="utf-8")
     assert ".tools\\sam\\Scripts\\sam.exe" in deploy_script
-    assert "AllowedShopId=controlled-demo.myshopify.com" in deploy_script
-    assert "AllowedAgencyId=shop_controlled-demo_myshopify_com" in deploy_script
+    assert "AllowedShopId=commercegov-aws-judge.myshopify.com" in deploy_script
+    assert "AllowedAgencyId=shop_commercegov-aws-judge_myshopify_com" in deploy_script
     assert "CommerceGovBaseUrl=https://app.commercegov.io" in deploy_script
     assert "BedrockModelId=global.anthropic.claude-sonnet-4-6" in deploy_script

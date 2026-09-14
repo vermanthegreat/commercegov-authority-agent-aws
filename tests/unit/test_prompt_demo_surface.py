@@ -30,10 +30,11 @@ from authority_agent.prompt_presets import (
 )
 from authority_agent.prompt_runtime import PromptRuntime
 from authority_agent.prompt_run_store import MemoryPromptRunStore
+from authority_agent.scenario_identity import CANONICAL_AGENCY, CANONICAL_SHOP
 from conftest import make_processor
 
-AGENCY = "shop_controlled-demo_myshopify_com"
-SHOP = "controlled-demo.myshopify.com"
+AGENCY = CANONICAL_AGENCY
+SHOP = CANONICAL_SHOP
 PRODUCT = ProductRef("gid-snowboard", "AWS Authority Demo Snowboard")
 
 

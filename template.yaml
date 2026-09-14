@@ -9,10 +9,10 @@ Parameters:
     AllowedPattern: '^[a-z0-9-]+$'
   AllowedAgencyId:
     Type: String
-    Default: shop_controlled-demo_myshopify_com
+    Default: shop_commercegov-aws-judge_myshopify_com
   AllowedShopId:
     Type: String
-    Default: controlled-demo.myshopify.com
+    Default: commercegov-aws-judge.myshopify.com
   BedrockModelId:
     Type: String
     Default: global.anthropic.claude-sonnet-4-6

@@ -27,8 +27,8 @@ if ($LASTEXITCODE -ne 0) { throw "SAM validation failed" }
     --no-fail-on-empty-changeset `
     --parameter-overrides `
         "RuntimeBuildId=$BuildId" `
-        "AllowedAgencyId=shop_controlled-demo_myshopify_com" `
-        "AllowedShopId=controlled-demo.myshopify.com" `
+        "AllowedAgencyId=shop_commercegov-aws-judge_myshopify_com" `
+        "AllowedShopId=commercegov-aws-judge.myshopify.com" `
         "BedrockModelId=global.anthropic.claude-sonnet-4-6" `
         "CommerceGovBaseUrl=https://app.commercegov.io"
 if ($LASTEXITCODE -ne 0) { throw "SAM deployment failed" }
