@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from authority_agent.prompt_intent import (
     PROMPT_SYSTEM_INSTRUCTION,
     PromptIntent,
@@ -53,6 +55,27 @@ def test_propose_fields_are_required_strings_with_extraction_descriptions() -> N
     assert "AWS Governed" not in PROMPT_SYSTEM_INSTRUCTION
     assert "When action is PROPOSE you MUST populate" in PROMPT_SYSTEM_INSTRUCTION
     assert "copy the quoted text without surrounding quotation marks" in PROMPT_SYSTEM_INSTRUCTION
+    product_description = str(props["product_query"].get("description") or "")
+    assert "identifier or exact title" in product_description
+    assert "Shopify product GID verbatim" in product_description
+    assert "Do not invent IDs" in PROMPT_SYSTEM_INSTRUCTION
+
+
+@pytest.mark.parametrize(
+    "product_query",
+    ["9253164613795", "gid://shopify/Product/9253164613795"],
+)
+def test_explicit_product_identifier_is_preserved_verbatim(product_query: str) -> None:
+    intent = PromptIntent.model_validate(
+        {
+            "action": "PROPOSE",
+            "summary": "Propose an exact product change.",
+            "product_query": product_query,
+            "mutation_class": "product.title",
+            "proposed_value": "Governed title",
+        }
+    )
+    assert intent.product_query == product_query
 
 
 def test_exact_live_allowed_prompt_intent_fields() -> None:

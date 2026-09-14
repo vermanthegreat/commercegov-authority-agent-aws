@@ -29,6 +29,14 @@ def test_allowed_proposal_resolves_aws_judge_authority_product() -> None:
     assert "7972360355917" != AUTHORITY_PRODUCT_ID
 
 
+def test_policy_preset_uses_aws_judge_product_id() -> None:
+    from authority_agent.scenario_identity import POLICY_PRODUCT_ID
+
+    assert POLICY_PRODUCT_ID == "9253164646563"
+    assert POLICY_PRODUCT_ID in PRESETS["FORBIDDEN_PROPOSAL"]
+    assert AUTHORITY_PRODUCT_ID in PRESETS["ALLOWED_PROPOSAL"]
+
+
 def test_all_presets_share_canonical_shop_and_review_link() -> None:
     assert PRESET_ORDER == (
         "ALLOWED_PROPOSAL",

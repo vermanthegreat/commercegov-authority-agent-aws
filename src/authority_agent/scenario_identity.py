@@ -9,7 +9,7 @@ from __future__ import annotations
 CANONICAL_SHOP = "commercegov-aws-judge.myshopify.com"
 CANONICAL_AGENCY = "shop_commercegov-aws-judge_myshopify_com"
 AUTHORITY_PRODUCT_ID = "9253164613795"
-POLICY_PRODUCT_ID = "7972360421453"
+POLICY_PRODUCT_ID = "9253164646563"
 AUTHORITY_TITLE = "AWS Authority Demo Snowboard"
 POLICY_TITLE = "AWS Policy Demo Snowboard"
 ALLOWED_PROPOSED_TITLE = "AWS Authority Demo Snowboard — Governed"

@@ -16,7 +16,7 @@ from authority_agent.commercegov_read import (
     CommerceGovTokenExpiredError,
     EffectivePolicySnapshot,
 )
-from authority_agent.scenario_identity import CANONICAL_SHOP, pinned_product_id
+from authority_agent.scenario_identity import CANONICAL_SHOP
 
 PROPOSAL_PATH_RE = re.compile(
     r"^/api/integration/v1/shops/[^/]+/products/[^/]+/proposals$"
@@ -24,6 +24,7 @@ PROPOSAL_PATH_RE = re.compile(
 PRODUCT_LIST_PATH_RE = re.compile(
     r"^/api/integration/v1/shops/[^/]+/products(?:\?.*)?$"
 )
+SHOPIFY_PRODUCT_GID_RE = re.compile(r"^gid://shopify/Product/(\d+)$")
 
 
 # Public integration list `stage` values. Early filter only — POST remains admission.
@@ -275,22 +276,21 @@ class CommerceGovHostAdapter:
             raise CommerceGovReadError("invalid_product_list_response") from exc
         if parsed.shop_id != shop_id:
             raise CommerceGovReadError("product_list_identity_mismatch")
+        requested_product_id = _product_id_query(needle)
+        if requested_product_id is not None:
+            for item in parsed.products:
+                if (
+                    str(item.product_id).rsplit("/", 1)[-1] == requested_product_id
+                    and list_stage_is_proposal_candidate(item.stage)
+                ):
+                    return _product_ref(item)
+            raise ProductResolutionError(TARGET_NOT_FOUND, query=query)
         exact_eligible = [
             item
             for item in parsed.products
             if item.title.casefold() == needle.casefold()
             and list_stage_is_proposal_candidate(item.stage)
         ]
-        pinned = pinned_product_id(needle)
-        if pinned:
-            pinned_matches = [
-                item
-                for item in exact_eligible
-                if str(item.product_id).rsplit("/", 1)[-1] == pinned
-            ]
-            if len(pinned_matches) == 1:
-                return _product_ref(pinned_matches[0])
-            raise ProductResolutionError(TARGET_NOT_FOUND, query=query)
         if len(exact_eligible) == 1:
             return _product_ref(exact_eligible[0])
         if len(exact_eligible) > 1:
@@ -336,6 +336,14 @@ def _product_ref(item: _ProductSummary) -> ProductRef:
         title=item.title,
         stage=str(item.stage or "").strip().lower(),
     )
+
+
+def _product_id_query(query: str) -> str | None:
+    needle = str(query or "").strip()
+    if needle.isdigit():
+        return needle
+    match = SHOPIFY_PRODUCT_GID_RE.fullmatch(needle)
+    return match.group(1) if match else None
 
 
 def _safe_json_mapping(response: httpx.Response) -> Mapping[str, Any] | None:

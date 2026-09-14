@@ -13,6 +13,7 @@ from authority_agent.commercegov_proposal import (
     ProductRef,
     ProductResolutionError,
     ProposalCreateResult,
+    TARGET_AMBIGUOUS,
     TARGET_NOT_FOUND,
     display_governance_state,
     domain_denial_reason,
@@ -222,6 +223,34 @@ def test_exact_title_resolves_one_runtime_product_id() -> None:
     assert transport.calls
 
 
+def test_exact_numeric_product_id_resolves_without_title_equality() -> None:
+    host = _adapter([ACTIVE], RecordingProposalTransport(result=_pass_body(ACTIVE)))
+    found = host.find_product(SHOP, AUTHORITY_PRODUCT_ID)
+    assert found is not None
+    assert found.product_id == AUTHORITY_PRODUCT_ID
+
+
+def test_shopify_product_gid_resolves_by_terminal_product_id() -> None:
+    host = _adapter([ACTIVE], RecordingProposalTransport(result=_pass_body(ACTIVE)))
+    found = host.find_product(SHOP, f"gid://shopify/Product/{AUTHORITY_PRODUCT_ID}")
+    assert found is not None
+    assert found.product_id == AUTHORITY_PRODUCT_ID
+
+
+def test_arbitrary_eligible_product_resolves_by_exact_title_and_id() -> None:
+    third = ProductRef("9253164679331", "AWS Third Demo Product", "review")
+    host = _adapter([ACTIVE, third], RecordingProposalTransport(result=_pass_body(third)))
+    assert host.find_product(SHOP, "aws third demo product") == third
+    assert host.find_product(SHOP, third.product_id) == third
+
+
+def test_unknown_numeric_product_id_is_target_not_found() -> None:
+    host = _adapter([ACTIVE], RecordingProposalTransport(result=_pass_body(ACTIVE)))
+    with pytest.raises(ProductResolutionError) as exc:
+        host.find_product(SHOP, "9999999999999")
+    assert exc.value.code == TARGET_NOT_FOUND
+
+
 def test_no_exact_title_match_is_target_not_found() -> None:
     transport = RecordingProposalTransport(result=_pass_body(ACTIVE))
     host = _adapter([ACTIVE], transport)
@@ -242,25 +271,16 @@ def test_no_exact_title_match_is_target_not_found() -> None:
     assert body["evidence"]["denial_reason"] == TARGET_NOT_FOUND
 
 
-def test_duplicate_exact_titles_resolve_pinned_scenario_product() -> None:
+def test_duplicate_exact_titles_are_ambiguous_without_product_id() -> None:
     duplicate = ProductRef("9000000000002", "AWS Authority Demo Snowboard", "active")
     transport = RecordingProposalTransport(result=_pass_body(ACTIVE))
     host = _adapter([ACTIVE, duplicate], transport)
-    found = host.find_product(SHOP, "AWS Authority Demo Snowboard")
+    with pytest.raises(ProductResolutionError) as exc:
+        host.find_product(SHOP, "AWS Authority Demo Snowboard")
+    assert exc.value.code == TARGET_AMBIGUOUS
+    found = host.find_product(SHOP, AUTHORITY_PRODUCT_ID)
     assert found is not None
     assert found.product_id == AUTHORITY_PRODUCT_ID
-    runtime = PromptRuntime(
-        interpreter=RecordingInterpreter(
-            propose_intent(product_query="AWS Authority Demo Snowboard")
-        ),
-        shop_id=SHOP,
-        host=host,
-    )
-    _posted, terminal, _store, _invoker = finish_prompt(run_event("duplicate"), runtime)
-    body = json.loads(terminal["body"])
-    assert body["state"] == "SUCCESS"
-    assert AUTHORITY_PRODUCT_ID in transport.calls[0]["path"]
-    assert "9000000000002" not in transport.calls[0]["path"]
 
 
 def test_find_product_rejects_non_canonical_shop() -> None:

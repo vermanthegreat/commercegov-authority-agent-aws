@@ -6,8 +6,10 @@ from dataclasses import dataclass
 
 from authority_agent.scenario_identity import (
     ALLOWED_PROPOSED_TITLE,
+    AUTHORITY_PRODUCT_ID,
     AUTHORITY_TITLE as ALLOWED_TARGET_TITLE,
     FORBIDDEN_PROPOSED_TITLE,
+    POLICY_PRODUCT_ID,
     POLICY_TITLE as FORBIDDEN_TARGET_TITLE,
 )
 
@@ -23,7 +25,7 @@ class ScenarioFixture:
 
 
 ALLOWED_PROPOSAL = (
-    f'Find the product with the exact title "{ALLOWED_TARGET_TITLE}".\n'
+    f'Find the product with the exact identifier "{AUTHORITY_PRODUCT_ID}".\n'
     "\n"
     "Check the applicable CommerceGov policy and propose changing its title to:\n"
     "\n"
@@ -34,7 +36,7 @@ ALLOWED_PROPOSAL = (
     "Do not make any production change."
 )
 FORBIDDEN_PROPOSAL = (
-    f'Find the product with the exact title "{FORBIDDEN_TARGET_TITLE}".\n'
+    f'Find the product with the exact identifier "{POLICY_PRODUCT_ID}".\n'
     "\n"
     "Check the applicable CommerceGov policy and propose changing its title to:\n"
     "\n"

@@ -41,7 +41,7 @@ Choose exactly one action:
 - OTHER: only when the user did not request PROPOSE, APPROVE, or APPLY.
 
 When action is PROPOSE you MUST populate these extraction fields:
-- product_query: the exact product title the user named. If the user said "exact title" or quoted a title, copy that title verbatim. Do not substitute a similar or partial product name.
+- product_query: the exact product identifier or exact title supplied by the operator. Preserve an explicitly supplied numeric product ID or Shopify product GID verbatim. If the user said "exact title" or quoted a title, copy that title verbatim. Do not invent IDs, fuzzy-match, or substitute a similar or partial product name.
 - mutation_class: product.title for title, product.description for description, product.meta_title or product.meta_description when those are requested
 - proposed_value: the exact replacement value the user specified. If the user quoted the value, copy the quoted text without surrounding quotation marks. Do not paraphrase, shorten, or invent a different value. Do not leave proposed_value empty when the user named a replacement. Do not put the replacement only in summary.
 
@@ -53,6 +53,7 @@ Examples:
 - "Find the product with the exact title X and propose changing its title to Y" → action=PROPOSE, product_query=X, mutation_class=product.title, proposed_value=Y
 - "Find X and propose changing its title to Y" → action=PROPOSE, product_query=X, mutation_class=product.title, proposed_value=Y
 - "Find X and propose changing its description to Y" → action=PROPOSE, product_query=X, mutation_class=product.description, proposed_value=Y
+- "Find product 9253164613795 and propose changing its title to Y" → action=PROPOSE, product_query=9253164613795, mutation_class=product.title, proposed_value=Y
 - "Propose a change that may violate policy" → action=PROPOSE, and still extract any named product, field, and replacement value
 - "Approve CommerceGov proposal 123" → action=APPROVE, proposal_id=123
 - "Apply CommerceGov proposal 123 to production" → action=APPLY, proposal_id=123
@@ -89,8 +90,10 @@ class PromptIntent(BaseModel):
     product_query: str = Field(
         default="",
         description=(
-            "Required for PROPOSE: the exact product title named by the user. "
-            "Copy quoted or exact-title text verbatim. Empty for APPROVE, APPLY, or OTHER."
+            "Required for PROPOSE: the exact product identifier or exact title supplied by the "
+            "operator. Preserve a numeric product ID or Shopify product GID verbatim. Copy quoted "
+            "or exact-title text verbatim. Never invent IDs or fuzzy-match. Empty for APPROVE, "
+            "APPLY, or OTHER."
         ),
     )
     mutation_class: str = Field(

@@ -306,22 +306,18 @@ def test_proposal_id_flows_into_later_approval_and_apply_presets() -> None:
     assert "guaranteed" not in FORBIDDEN_PROPOSED_TITLE.casefold()
 
 
-def test_scenario_fixtures_bind_titles_not_shopify_ids() -> None:
-    import re
-
-    shopify_id = re.compile(r"(?:gid://shopify|\b\d{10,}\b)", re.IGNORECASE)
+def test_scenario_fixture_prompts_use_stable_aws_judge_product_ids() -> None:
     allowed = SCENARIO_FIXTURES["ALLOWED_PROPOSAL"]
     forbidden = SCENARIO_FIXTURES["FORBIDDEN_PROPOSAL"]
     assert allowed.target_title == ALLOWED_TARGET_TITLE
     assert forbidden.target_title == "AWS Policy Demo Snowboard"
     assert allowed.prompt == ALLOWED_PROPOSAL
     assert forbidden.prompt == FORBIDDEN_PROPOSAL
-    assert not hasattr(allowed, "product_id")
-    assert not hasattr(forbidden, "product_id")
-    for fixture in (allowed, forbidden):
-        blob = f"{fixture.target_title}\n{fixture.prompt}"
-        assert shopify_id.search(blob) is None
-    html = render_prompt_page(shop_id=SHOP)
+    assert "9253164613795" in allowed.prompt
+    assert "9253164646563" in forbidden.prompt
+    assert "797236" not in allowed.prompt
+    assert "797236" not in forbidden.prompt
+    html = render_prompt_page(shop_id="commercegov-aws-judge.myshopify.com")
     assert apply_preset("ATTEMPT_APPROVAL", "501") == "Approve CommerceGov proposal 501."
     assert apply_preset("ATTEMPT_APPLY", "501") == (
         "Apply CommerceGov proposal 501 to production."
