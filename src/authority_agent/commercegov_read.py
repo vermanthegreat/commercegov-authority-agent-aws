@@ -216,3 +216,33 @@ class CommerceGovReadClient:
             proposal_instructions=parsed.rules.proposal_instructions,
         )
 
+    def get_title_policy(self, *, agency_id: str, shop_id: str) -> EffectivePolicySnapshot:
+        shop = quote(shop_id, safe="")
+        payload = self._transport.get_json(
+            f"/api/integration/v1/shops/{shop}/policy"
+        )
+        try:
+            parsed = _PolicyResponse.model_validate(payload)
+        except ValidationError as exc:
+            raise CommerceGovReadError("invalid_policy_context_response") from exc
+        if parsed.shop_id != shop_id:
+            raise CommerceGovReadError("policy_context_identity_mismatch")
+        return EffectivePolicySnapshot(
+            agency_id=agency_id,
+            shop_id=shop_id,
+            mutation_class="product.title",
+            effective_policy_hash=parsed.effective_policy_hash,
+            controlled="title" in parsed.controlled_fields,
+            brand_tone=parsed.rules.brand_tone,
+            forbidden_terms=tuple(parsed.rules.forbidden_terms),
+            max_length=parsed.rules.max_length.title,
+            keyword_coverage=parsed.rules.seo_constraints.keyword_coverage,
+            proposal_instructions=parsed.rules.proposal_instructions,
+        )
+
+    def list_products(self, shop_id: str) -> Mapping[str, Any]:
+        shop = quote(shop_id, safe="")
+        return self._transport.get_json(
+            f"/api/integration/v1/shops/{shop}/products?limit=100"
+        )
+
