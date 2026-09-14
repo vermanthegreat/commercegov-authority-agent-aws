@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from typing import Any, Mapping, Protocol
 from urllib.parse import quote
 
@@ -10,6 +11,8 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from authority_agent.contracts import AuthorityEvent
+
+LOGGER = logging.getLogger("authority_agent.commercegov_read")
 
 
 class CommerceGovReadError(RuntimeError):
@@ -58,6 +61,12 @@ class HttpxCommerceGovReadTransport:
                 error_detail = error_payload.get("error") if isinstance(error_payload, Mapping) else None
                 if isinstance(error_detail, Mapping) and error_detail.get("code") == "token_expired":
                     raise CommerceGovTokenExpiredError()
+            if response.status_code >= 400:
+                LOGGER.warning(
+                    "commercegov_read_http_failed status=%s path=%s",
+                    response.status_code,
+                    path.split("?", 1)[0],
+                )
             response.raise_for_status()
             payload = response.json()
         except CommerceGovTokenExpiredError:

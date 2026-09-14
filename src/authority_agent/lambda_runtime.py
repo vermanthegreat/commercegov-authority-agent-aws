@@ -253,12 +253,12 @@ def build_prompt_runtime(
         read_transport = LazyHttpsCommerceGovReadTransport(
             base_url=config.commercegov_base_url,
             credential_manager=credential_manager,
-            timeout_seconds=5.0,
+            timeout_seconds=20.0,
         )
         proposal_transport = LazyHttpsCommerceGovProposalTransport(
             base_url=config.commercegov_base_url,
             credential_manager=credential_manager,
-            timeout_seconds=5.0,
+            timeout_seconds=20.0,
         )
         host = CommerceGovHostAdapter(
             read_client=CommerceGovReadClient(read_transport),
