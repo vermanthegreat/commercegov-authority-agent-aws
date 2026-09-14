@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+from contextvars import copy_context
 from threading import Event
 from time import monotonic
 from typing import Any, Callable, Literal, Protocol, get_args, cast
@@ -410,7 +411,8 @@ class StrandsPromptInterpreter:
             )
             abandoned = Event()
             executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="strands-prompt")
-            future = executor.submit(_invoke_structured_intent, agent, payload)
+            context = copy_context()
+            future = executor.submit(context.run, _invoke_structured_intent, agent, payload)
             try:
                 intent = future.result(timeout=self._timeout_seconds)
             except FutureTimeoutError as exc:

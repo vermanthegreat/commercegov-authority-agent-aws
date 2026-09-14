@@ -5,6 +5,7 @@ import logging
 from types import SimpleNamespace
 
 from authority_agent.strands_observability import SafeStrandsHooks, bind_semantic_correlation, reset_semantic_correlation
+from authority_agent.prompt_intent import StrandsPromptInterpreter
 from authority_agent.strands_provider import StrandsSemanticProvider
 from tests.integration.test_p1_strands_provider import FakeAgent, output, provider_for
 
@@ -85,3 +86,31 @@ def test_strands_logger_emits_info() -> None:
     from authority_agent.strands_observability import LOGGER
 
     assert LOGGER.level == logging.INFO
+
+
+def test_prompt_interpreter_worker_preserves_run_correlation(caplog) -> None:
+    caplog.set_level(logging.INFO, logger="authority_agent.strands")
+    run_id = "run-thread-context"
+    model_id = "global.anthropic.claude-sonnet-4-6"
+
+    def agent(_prompt, *, structured_output_model):
+        return SimpleNamespace(
+            structured_output={
+                "action": "PROPOSE",
+                "summary": "Propose a governed title change.",
+                "product_query": "9253164646563",
+                "mutation_class": "product.title",
+                "proposed_value": "Governed title",
+            }
+        )
+
+    interpreter = StrandsPromptInterpreter(agent_factory=lambda: agent, model_id=model_id)
+    intent = interpreter.interpret(prompt="Propose a title change.", policy_context={}, run_id=run_id)
+
+    assert intent.action == "PROPOSE"
+    payloads = [json.loads(record.getMessage()) for record in caplog.records if record.name == "authority_agent.strands"]
+    lifecycle = {payload["stage"]: payload for payload in payloads}
+    for stage in ("agent_started", "model_started", "model_completed", "agent_completed"):
+        assert lifecycle[stage]["event_id"] == run_id
+        assert lifecycle[stage]["model_id"] == model_id
+    assert lifecycle["model_completed"]["success"] is True
