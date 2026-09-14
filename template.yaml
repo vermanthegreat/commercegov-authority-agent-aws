@@ -129,6 +129,11 @@ Resources:
                 Action:
                   - secretsmanager:GetSecretValue
                 Resource: !Ref InboundBearerSecret
+              - Sid: InvokeSelfAgentPromptWorker
+                Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:commercegov-authority-agent-${EnvironmentName}
               - Sid: ManageCommerceGovReadSecret
                 Effect: Allow
                 Action:
@@ -185,7 +190,7 @@ Resources:
       Architectures:
         - x86_64
       MemorySize: 1024
-      Timeout: 29
+      Timeout: 90
       Role: !GetAtt AuthorityFunctionRole.Arn
       Environment:
         Variables:
@@ -194,6 +199,7 @@ Resources:
           ALLOWED_SHOP_ID: !Ref AllowedShopId
           BEDROCK_MODEL_ID: !Ref BedrockModelId
           SEMANTIC_TIMEOUT_SECONDS: '26'
+          PROMPT_SEMANTIC_TIMEOUT_SECONDS: '50'
           RUNTIME_BUILD_ID: !Ref RuntimeBuildId
           INBOUND_BEARER_SECRET_ARN: !Ref InboundBearerSecret
           COMMERCEGOV_BASE_URL: !Ref CommerceGovBaseUrl
@@ -240,6 +246,36 @@ Resources:
             TimeoutInMillis: 30000
             Auth:
               Authorizer: NONE
+        AgentPage:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AuthorityApi
+            Path: /agent
+            Method: GET
+            PayloadFormatVersion: '2.0'
+            TimeoutInMillis: 30000
+            Auth:
+              Authorizer: NONE
+        AgentRun:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AuthorityApi
+            Path: /agent/run
+            Method: POST
+            PayloadFormatVersion: '2.0'
+            TimeoutInMillis: 30000
+            Auth:
+              Authorizer: NONE
+        AgentRunStatus:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AuthorityApi
+            Path: /agent/run/{runId}
+            Method: GET
+            PayloadFormatVersion: '2.0'
+            TimeoutInMillis: 30000
+            Auth:
+              Authorizer: NONE
       Tags:
         Project: commercegov-authority-agent-aws
         Phase: P3B
@@ -273,3 +309,6 @@ Outputs:
   DemoEndpoint:
     Description: Public bounded judge demo
     Value: !Sub https://${AuthorityApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${EnvironmentName}/demo
+  AgentPromptEndpoint:
+    Description: Public judge AWS commerce agent prompt page
+    Value: !Sub https://${AuthorityApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${EnvironmentName}/agent
