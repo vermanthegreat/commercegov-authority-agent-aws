@@ -144,6 +144,12 @@ def test_strict_secret_envelope_accepts_exact_authority() -> None:
     assert parsed.client_id == OAUTH_CLIENT_ID
     assert frozenset(parsed.scopes) == OAUTH_SCOPES
     assert parsed.subject == "subject-1"
+    from authority_agent.oauth_credentials import OAUTH_SCOPES_PROPOSE
+
+    propose = OAuthSecretEnvelope.from_secret_string(
+        envelope_json(scopes=sorted(OAUTH_SCOPES_PROPOSE))
+    )
+    assert frozenset(propose.scopes) == OAUTH_SCOPES_PROPOSE
 
 
 @pytest.mark.parametrize(
@@ -218,13 +224,16 @@ def test_missing_rotated_refresh_token_preserves_current_refresh_token() -> None
 
 
 @pytest.mark.parametrize(
-    "scope",
+    ("scope", "code"),
     [
-        "shops:read products:read",
-        "shops:read products:read policy:read proposals:write",
+        ("shops:read products:read", "oauth_refresh_contract_invalid"),
+        (
+            "shops:read products:read policy:read proposals:write",
+            "oauth_refresh_authority_mismatch",
+        ),
     ],
 )
-def test_refresh_rejects_scope_change(scope: str) -> None:
+def test_refresh_rejects_scope_change(scope: str, code: str) -> None:
     secrets = FakeSecrets(envelope_json(expires_at=NOW + timedelta(seconds=30)))
     table = FakeLeaseTable()
     mgr = manager(
@@ -236,7 +245,7 @@ def test_refresh_rejects_scope_change(scope: str) -> None:
     )
     with pytest.raises(OAuthCredentialError) as exc:
         mgr.access_token()
-    assert exc.value.code == "oauth_refresh_contract_invalid"
+    assert exc.value.code == code
     assert secrets.put_calls == []
 
 

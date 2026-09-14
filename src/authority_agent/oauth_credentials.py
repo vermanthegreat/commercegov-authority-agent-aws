@@ -18,6 +18,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 OAUTH_SECRET_SCHEMA = "commercegov.oauth-read-secret.v1"
 OAUTH_CLIENT_ID = "aws-authority-agent-p3b-read"
 OAUTH_SCOPES = frozenset({"shops:read", "products:read", "policy:read"})
+OAUTH_SCOPES_PROPOSE = frozenset({*OAUTH_SCOPES, "proposals:write"})
+OAUTH_ALLOWED_SCOPE_SETS = (OAUTH_SCOPES, OAUTH_SCOPES_PROPOSE)
 OAUTH_REFRESH_PATH = "/oauth/integration/token"
 
 
@@ -66,7 +68,7 @@ class OAuthSecretEnvelope(BaseModel):
     @field_validator("scopes")
     @classmethod
     def _scopes_are_exact(cls, value: tuple[str, ...]) -> tuple[str, ...]:
-        if len(value) != len(OAUTH_SCOPES) or frozenset(value) != OAUTH_SCOPES:
+        if frozenset(value) not in OAUTH_ALLOWED_SCOPE_SETS:
             raise ValueError("oauth_scope_authority_mismatch")
         return tuple(sorted(value))
 
@@ -107,8 +109,8 @@ class _RefreshTokenResponse(BaseModel):
     @field_validator("scope")
     @classmethod
     def _scope_is_exact(cls, value: str) -> str:
-        scopes = value.split()
-        if len(scopes) != len(OAUTH_SCOPES) or frozenset(scopes) != OAUTH_SCOPES:
+        scopes = frozenset(value.split())
+        if scopes not in OAUTH_ALLOWED_SCOPE_SETS:
             raise ValueError("oauth_scope_authority_mismatch")
         return " ".join(sorted(scopes))
 
@@ -326,6 +328,9 @@ class CommerceGovOAuthCredentialManager:
             parsed = _RefreshTokenResponse.model_validate(payload)
         except (ValidationError, ValueError, TypeError):
             raise OAuthCredentialError("oauth_refresh_contract_invalid") from None
+
+        if frozenset(parsed.scope.split()) != frozenset(current.scopes):
+            raise OAuthCredentialError("oauth_refresh_authority_mismatch")
 
         refresh_token = parsed.refresh_token or current.refresh_token
         try:
