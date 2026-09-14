@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from typing import Any, Literal, Protocol
 from uuid import uuid4
 
+from authority_agent.commercegov_read import CommerceGovReadError
 from authority_agent.commercegov_proposal import (
     CommerceGovProposalError,
     ProductRef,
@@ -26,6 +28,7 @@ from authority_agent.strands_provider import SemanticProviderFailure
 RunState = Literal["SUCCESS", "DENIED", "ERROR"]
 AGENT_AUTHORITY = "PROPOSE_ONLY"
 PRODUCTION_MUTATION_NONE = "NONE"
+LOGGER = logging.getLogger("authority_agent.prompt_runtime")
 
 
 class PromptHost(Protocol):
@@ -161,7 +164,20 @@ class PromptRuntime:
                     denial_reason=reason,
                 ),
             )
+        except CommerceGovReadError as exc:
+            reason = str(exc.code or "").strip() or "product_lookup_failed"
+            LOGGER.warning("product_lookup_read_error code=%s", reason)
+            return PromptRunResult(
+                "ERROR",
+                agent_response,
+                _with_evidence(
+                    evidence,
+                    requested_mutation=mutation,
+                    denial_reason=reason,
+                ),
+            )
         except Exception:
+            LOGGER.exception("product_lookup_failed")
             return PromptRunResult(
                 "ERROR",
                 agent_response,
